@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Eye, Edit, Trash2, Mail, Phone, FileText } from 'lucide-react';
+import React from 'react';
+import { Eye, Edit, Trash2, Mail, Phone, User } from 'lucide-react';
 import { Candidate } from '../../types';
 
 interface CandidateTableProps {
@@ -20,11 +20,11 @@ const CandidateTable: React.FC<CandidateTableProps> = ({
   const getStatusColor = (status: Candidate['status']) => {
     switch (status) {
       case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-green-100 text-green-800';
       case 'interviewed':
         return 'bg-blue-100 text-blue-800';
       case 'approved':
-        return 'bg-green-100 text-green-800';
+        return 'bg-purple-100 text-purple-800';
       case 'rejected':
         return 'bg-red-100 text-red-800';
       default:
@@ -35,20 +35,24 @@ const CandidateTable: React.FC<CandidateTableProps> = ({
   const getStatusText = (status: Candidate['status']) => {
     switch (status) {
       case 'pending':
-        return 'Pendente';
+        return 'Ativo';
       case 'interviewed':
         return 'Entrevistado';
       case 'approved':
-        return 'Aprovado';
+        return 'Contratado';
       case 'rejected':
-        return 'Rejeitado';
+        return 'Inativo';
       default:
         return 'Desconhecido';
     }
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR');
+    return new Date(dateString).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
   };
 
   if (loading) {
@@ -82,13 +86,13 @@ const CandidateTable: React.FC<CandidateTableProps> = ({
                 Candidato
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Posição
+                Contato
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Data
+                Data de Cadastro
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Ações
@@ -100,30 +104,40 @@ const CandidateTable: React.FC<CandidateTableProps> = ({
               <tr key={candidate.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    <div className="h-10 w-10 bg-primary-100 rounded-full flex items-center justify-center">
-                      <span className="text-primary-600 font-medium">
-                        {candidate.name.charAt(0).toUpperCase()}
-                      </span>
+                    <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center overflow-hidden">
+                      {candidate.photo_url ? (
+                        <img
+                          src={candidate.photo_url}
+                          alt={candidate.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <User className="h-6 w-6 text-gray-400" />
+                      )}
                     </div>
                     <div className="ml-4">
                       <div className="text-sm font-medium text-gray-900">
                         {candidate.name}
                       </div>
-                      <div className="text-sm text-gray-500 flex items-center">
-                        <Mail className="h-3 w-3 mr-1" />
-                        {candidate.email}
+                      <div className="text-sm text-gray-500">
+                        {candidate.position}
                       </div>
-                      {candidate.phone && (
-                        <div className="text-sm text-gray-500 flex items-center">
-                          <Phone className="h-3 w-3 mr-1" />
-                          {candidate.phone}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{candidate.position}</div>
+                  <div className="space-y-1">
+                    <div className="text-sm text-gray-900 flex items-center">
+                      <Mail className="h-3 w-3 mr-2 text-gray-400" />
+                      {candidate.email}
+                    </div>
+                    {candidate.phone && (
+                      <div className="text-sm text-gray-500 flex items-center">
+                        <Phone className="h-3 w-3 mr-2 text-gray-400" />
+                        {candidate.phone}
+                      </div>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(candidate.status)}`}>
@@ -137,32 +151,21 @@ const CandidateTable: React.FC<CandidateTableProps> = ({
                   <div className="flex justify-end space-x-2">
                     <button
                       onClick={() => onView(candidate)}
-                      className="text-primary-600 hover:text-primary-900 p-1 rounded hover:bg-primary-50 transition-colors"
+                      className="text-primary-600 hover:text-primary-900 p-2 rounded-lg hover:bg-primary-50 transition-colors"
                       title="Visualizar"
                     >
                       <Eye className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => onEdit(candidate)}
-                      className="text-yellow-600 hover:text-yellow-900 p-1 rounded hover:bg-yellow-50 transition-colors"
+                      className="text-yellow-600 hover:text-yellow-900 p-2 rounded-lg hover:bg-yellow-50 transition-colors"
                       title="Editar"
                     >
                       <Edit className="h-4 w-4" />
                     </button>
-                    {candidate.resume_url && (
-                      <a
-                        href={candidate.resume_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-green-600 hover:text-green-900 p-1 rounded hover:bg-green-50 transition-colors"
-                        title="Ver currículo"
-                      >
-                        <FileText className="h-4 w-4" />
-                      </a>
-                    )}
                     <button
                       onClick={() => onDelete(candidate)}
-                      className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50 transition-colors"
+                      className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
                       title="Excluir"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -176,7 +179,9 @@ const CandidateTable: React.FC<CandidateTableProps> = ({
       </div>
       {candidates.length === 0 && (
         <div className="p-12 text-center">
-          <p className="text-gray-500">Nenhum candidato encontrado</p>
+          <User className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500 text-lg font-medium">Nenhum candidato encontrado</p>
+          <p className="text-gray-400 text-sm">Adicione candidatos para começar</p>
         </div>
       )}
     </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Mail, Phone, Calendar, FileText, Edit } from 'lucide-react';
+import { X, Mail, Phone, Calendar, MapPin, Edit, User, ExternalLink, Clock } from 'lucide-react';
 import { Candidate } from '../../types';
 
 interface CandidateModalProps {
@@ -16,11 +16,11 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const getStatusColor = (status: Candidate['status']) => {
     switch (status) {
       case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-green-100 text-green-800';
       case 'interviewed':
         return 'bg-blue-100 text-blue-800';
       case 'approved':
-        return 'bg-green-100 text-green-800';
+        return 'bg-purple-100 text-purple-800';
       case 'rejected':
         return 'bg-red-100 text-red-800';
       default:
@@ -31,13 +31,13 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
   const getStatusText = (status: Candidate['status']) => {
     switch (status) {
       case 'pending':
-        return 'Pendente';
+        return 'Ativo';
       case 'interviewed':
         return 'Entrevistado';
       case 'approved':
-        return 'Aprovado';
+        return 'Contratado';
       case 'rejected':
-        return 'Rejeitado';
+        return 'Inativo';
       default:
         return 'Desconhecido';
     }
@@ -53,9 +53,34 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
     });
   };
 
+  // Mock action history
+  const actionHistory = [
+    {
+      id: '1',
+      action: 'Candidato cadastrado',
+      user: 'Sistema',
+      date: candidate.created_at,
+      type: 'create'
+    },
+    {
+      id: '2',
+      action: 'Perfil atualizado',
+      user: 'Ana Carolina',
+      date: candidate.updated_at,
+      type: 'update'
+    },
+    {
+      id: '3',
+      action: 'Status alterado para Entrevistado',
+      user: 'Roberto Lima',
+      date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      type: 'status'
+    }
+  ];
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-card max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-card max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
           <h2 className="text-xl font-semibold text-gray-900">
             Perfil do Candidato
@@ -69,19 +94,26 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
         </div>
 
         <div className="p-6">
-          <div className="flex items-start justify-between mb-6">
-            <div className="flex items-center space-x-4">
-              <div className="h-16 w-16 bg-primary-100 rounded-full flex items-center justify-center">
-                <span className="text-primary-600 font-bold text-xl">
-                  {candidate.name.charAt(0).toUpperCase()}
-                </span>
+          {/* Header with photo and basic info */}
+          <div className="flex items-start justify-between mb-8">
+            <div className="flex items-center space-x-6">
+              <div className="h-24 w-24 bg-gray-100 rounded-full flex items-center justify-center overflow-hidden">
+                {candidate.photo_url ? (
+                  <img
+                    src={candidate.photo_url}
+                    alt={candidate.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <User className="h-10 w-10 text-gray-400" />
+                )}
               </div>
               <div>
-                <h3 className="text-2xl font-bold text-gray-900">
+                <h3 className="text-2xl font-bold text-gray-900 mb-1">
                   {candidate.name}
                 </h3>
-                <p className="text-gray-600">{candidate.position}</p>
-                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(candidate.status)}`}>
+                <p className="text-lg text-gray-600 mb-2">{candidate.position}</p>
+                <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${getStatusColor(candidate.status)}`}>
                   {getStatusText(candidate.status)}
                 </span>
               </div>
@@ -95,75 +127,116 @@ const CandidateModal: React.FC<CandidateModalProps> = ({
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Contact Information */}
+            <div className="lg:col-span-2 space-y-6">
               <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">
                   Informações de Contato
                 </h4>
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2 text-gray-600">
-                    <Mail className="h-4 w-4" />
-                    <span>{candidate.email}</span>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center space-x-3">
+                    <Mail className="h-5 w-5 text-gray-400" />
+                    <span className="text-gray-900">{candidate.email}</span>
                   </div>
                   {candidate.phone && (
-                    <div className="flex items-center space-x-2 text-gray-600">
-                      <Phone className="h-4 w-4" />
-                      <span>{candidate.phone}</span>
+                    <div className="flex items-center space-x-3">
+                      <Phone className="h-5 w-5 text-gray-400" />
+                      <span className="text-gray-900">{candidate.phone}</span>
+                    </div>
+                  )}
+                  {candidate.address && (
+                    <div className="flex items-center space-x-3">
+                      <MapPin className="h-5 w-5 text-gray-400" />
+                      <span className="text-gray-900">{candidate.address}</span>
+                    </div>
+                  )}
+                  {candidate.linkedin && (
+                    <div className="flex items-center space-x-3">
+                      <ExternalLink className="h-5 w-5 text-gray-400" />
+                      <a
+                        href={candidate.linkedin}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary-600 hover:text-primary-700 transition-colors"
+                      >
+                        LinkedIn Profile
+                      </a>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">
-                  Datas Importantes
-                </h4>
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2 text-gray-600">
-                    <Calendar className="h-4 w-4" />
-                    <span>Cadastrado em {formatDate(candidate.created_at)}</span>
-                  </div>
-                  <div className="flex items-center space-x-2 text-gray-600">
-                    <Calendar className="h-4 w-4" />
-                    <span>Atualizado em {formatDate(candidate.updated_at)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {candidate.resume_url && (
+              {candidate.summary && (
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">
-                    Currículo
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                    Resumo Profissional
                   </h4>
-                  <a
-                    href={candidate.resume_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center space-x-2 text-primary-600 hover:text-primary-700 transition-colors"
-                  >
-                    <FileText className="h-4 w-4" />
-                    <span>Visualizar currículo</span>
-                  </a>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                      {candidate.summary}
+                    </p>
+                  </div>
                 </div>
               )}
-            </div>
-          </div>
 
-          {candidate.notes && (
-            <div className="mt-6">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">
-                Observações
-              </h4>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-gray-700 whitespace-pre-wrap">
-                  {candidate.notes}
-                </p>
+              <div>
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                  Datas Importantes
+                </h4>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center space-x-3">
+                    <Calendar className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <span className="text-sm text-gray-600">Cadastrado em:</span>
+                      <span className="ml-2 text-gray-900">{formatDate(candidate.created_at)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <Clock className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <span className="text-sm text-gray-600">Última atualização:</span>
+                      <span className="ml-2 text-gray-900">{formatDate(candidate.updated_at)}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          )}
+
+            {/* Action History */}
+            <div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                Histórico de Ações
+              </h4>
+              <div className="space-y-4">
+                {actionHistory.map((action) => (
+                  <div key={action.id} className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex items-start space-x-3">
+                      <div className={`p-2 rounded-full ${
+                        action.type === 'create' ? 'bg-green-100' :
+                        action.type === 'update' ? 'bg-blue-100' :
+                        'bg-yellow-100'
+                      }`}>
+                        <Clock className={`h-3 w-3 ${
+                          action.type === 'create' ? 'text-green-600' :
+                          action.type === 'update' ? 'text-blue-600' :
+                          'text-yellow-600'
+                        }`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900">
+                          {action.action}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {action.user} • {formatDate(action.date)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
