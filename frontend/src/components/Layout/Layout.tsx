@@ -1,5 +1,5 @@
 // O Layout deve ser algo assim:
-import React, { ReactNode } from 'react';
+import { ReactNode } from 'react';
 
 interface LayoutProps {
   children: ReactNode;  // Esta linha é importante!
@@ -14,4 +14,4 @@ function Layout({ children }: LayoutProps) {
   );
 }
 
-export default Layout;
+export default Layout
