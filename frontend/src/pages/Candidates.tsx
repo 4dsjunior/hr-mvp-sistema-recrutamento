@@ -7,7 +7,11 @@ import CandidatesFilters from '../components/Candidates/CandidatesFilters';
 import Pagination from '../components/UI/Pagination';
 import ToastContainer from '../components/UI/ToastContainer';
 import { Candidate } from '../types';
+<<<<<<< HEAD
 import { candidatesApi } from '../services/candidatesApi';
+=======
+import { candidateService, CandidateFilters } from '../services/candidateService';
+>>>>>>> 7f531d6f5fd857414939463899b888cc5aefc78f
 import { useToast } from '../hooks/useToast';
 
 const Candidates: React.FC = () => {
@@ -28,7 +32,11 @@ const Candidates: React.FC = () => {
   const [totalItems, setTotalItems] = useState(0);
   const itemsPerPage = 10;
 
+<<<<<<< HEAD
   const { toasts, removeToast, showSuccess, showError, showInfo } = useToast();
+=======
+  const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
+>>>>>>> 7f531d6f5fd857414939463899b888cc5aefc78f
 
   // Debounced search
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
@@ -37,7 +45,84 @@ const Candidates: React.FC = () => {
     try {
       setLoading(true);
       
+<<<<<<< HEAD
       let results: Candidate[];
+=======
+      // For now, use mock data since backend integration is not complete
+      const mockCandidates: Candidate[] = [
+        {
+          id: '1',
+          name: 'Maria Silva Santos',
+          email: 'maria.silva@email.com',
+          phone: '(11) 99999-9999',
+          position: 'Desenvolvedor Frontend',
+          status: 'pending',
+          photo_url: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=150',
+          address: 'São Paulo, SP',
+          summary: 'Desenvolvedora Frontend com 5 anos de experiência em React, TypeScript e Node.js. Especialista em desenvolvimento de interfaces modernas e responsivas.',
+          linkedin: 'https://linkedin.com/in/mariasilva',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        {
+          id: '2',
+          name: 'João Santos Oliveira',
+          email: 'joao.santos@email.com',
+          phone: '(11) 88888-8888',
+          position: 'Designer UX/UI',
+          status: 'interviewed',
+          address: 'Rio de Janeiro, RJ',
+          summary: 'Designer UX/UI com foco em experiência do usuário e design thinking. Experiência em Figma, Adobe XD e prototipagem.',
+          linkedin: 'https://linkedin.com/in/joaosantos',
+          created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+          updated_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        },
+        {
+          id: '3',
+          name: 'Ana Costa Ferreira',
+          email: 'ana.costa@email.com',
+          phone: '(11) 77777-7777',
+          position: 'Analista de Dados',
+          status: 'approved',
+          photo_url: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=150',
+          address: 'Belo Horizonte, MG',
+          summary: 'Analista de dados especializada em Python, SQL e Machine Learning. Experiência em análise estatística e visualização de dados.',
+          linkedin: 'https://linkedin.com/in/anacosta',
+          created_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+          updated_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+        },
+        {
+          id: '4',
+          name: 'Pedro Oliveira Lima',
+          email: 'pedro.oliveira@email.com',
+          phone: '(11) 66666-6666',
+          position: 'Desenvolvedor Backend',
+          status: 'rejected',
+          address: 'Porto Alegre, RS',
+          summary: 'Desenvolvedor Backend com expertise em Java, Spring Boot e microserviços. Conhecimento em arquitetura de sistemas distribuídos.',
+          linkedin: 'https://linkedin.com/in/pedrooliveira',
+          created_at: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
+          updated_at: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
+        },
+        {
+          id: '5',
+          name: 'Carla Mendes Rodrigues',
+          email: 'carla.mendes@email.com',
+          phone: '(11) 55555-5555',
+          position: 'Product Manager',
+          status: 'pending',
+          photo_url: 'https://images.pexels.com/photos/1181686/pexels-photo-1181686.jpeg?auto=compress&cs=tinysrgb&w=150',
+          address: 'Curitiba, PR',
+          summary: 'Product Manager com experiência em metodologias ágeis, análise de mercado e gestão de produtos digitais.',
+          linkedin: 'https://linkedin.com/in/carlamendes',
+          created_at: new Date(Date.now() - 96 * 60 * 60 * 1000).toISOString(),
+          updated_at: new Date(Date.now() - 96 * 60 * 60 * 1000).toISOString(),
+        },
+      ];
+
+      // Apply filters
+      let filteredCandidates = mockCandidates;
+>>>>>>> 7f531d6f5fd857414939463899b888cc5aefc78f
       
       // Se há filtros, usar search, senão usar getAll
       if (searchQuery || statusFilter) {
@@ -120,9 +205,15 @@ const Candidates: React.FC = () => {
   const handleDeleteCandidate = async (candidate: Candidate) => {
     if (window.confirm(`Tem certeza que deseja excluir o candidato ${candidate.name}?`)) {
       try {
+<<<<<<< HEAD
         await candidatesApi.delete(candidate.id);
         showSuccess('Candidato excluído', `${candidate.name} foi removido com sucesso.`);
         fetchCandidates();
+=======
+        // await candidateService.deleteCandidate(candidate.id);
+        setCandidates(candidates.filter(c => c.id !== candidate.id));
+        showSuccess('Candidato excluído', `${candidate.name} foi removido com sucesso.`);
+>>>>>>> 7f531d6f5fd857414939463899b888cc5aefc78f
       } catch (error: any) {
         console.error('Erro ao excluir candidato:', error);
         showError('Erro ao excluir candidato', error.message);
@@ -136,12 +227,36 @@ const Candidates: React.FC = () => {
       
       if (editingCandidate) {
         // Update existing candidate
+<<<<<<< HEAD
         await candidatesApi.update(editingCandidate.id, data);
         showSuccess('Candidato atualizado', `${data.name} foi atualizado com sucesso.`);
       } else {
         // Create new candidate
         await candidatesApi.create(data);
         showSuccess('Candidato criado', `${data.name} foi adicionado com sucesso.`);
+=======
+        // const updatedCandidate = await candidateService.updateCandidate(editingCandidate.id, data);
+        const updatedCandidate = {
+          ...editingCandidate,
+          ...data,
+          updated_at: new Date().toISOString(),
+        };
+        setCandidates(candidates.map(c => 
+          c.id === editingCandidate.id ? updatedCandidate : c
+        ));
+        showSuccess('Candidato atualizado', `${updatedCandidate.name} foi atualizado com sucesso.`);
+      } else {
+        // Create new candidate
+        // const newCandidate = await candidateService.createCandidate(data as Omit<Candidate, 'id' | 'created_at' | 'updated_at'>);
+        const newCandidate: Candidate = {
+          id: Date.now().toString(),
+          ...data as Candidate,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        setCandidates([newCandidate, ...candidates]);
+        showSuccess('Candidato criado', `${newCandidate.name} foi adicionado com sucesso.`);
+>>>>>>> 7f531d6f5fd857414939463899b888cc5aefc78f
       }
       
       setShowForm(false);

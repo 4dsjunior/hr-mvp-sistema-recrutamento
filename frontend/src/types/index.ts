@@ -11,9 +11,17 @@ export interface Candidate {
   id: string;
   name: string;
   email: string;
+<<<<<<< HEAD
   phone?: string; // made optional for compatibility
+=======
+  phone?: string;
+>>>>>>> 7f531d6f5fd857414939463899b888cc5aefc78f
   position: string;
   status: 'pending' | 'interviewed' | 'approved' | 'rejected';
+  photo_url?: string;
+  address?: string;
+  summary?: string;
+  linkedin?: string;
   resume_url?: string;
   notes?: string;
   created_at: string;
