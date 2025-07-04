@@ -9,6 +9,8 @@ interface CandidatesFiltersProps {
   sortBy: string;
   onSortChange: (sort: string) => void;
   onExport: () => void;
+  onRefresh: () => void; // added for compatibility with Candidates.tsx
+  loading: boolean; // added for compatibility
 }
 
 const CandidatesFilters: React.FC<CandidatesFiltersProps> = ({
@@ -19,6 +21,8 @@ const CandidatesFilters: React.FC<CandidatesFiltersProps> = ({
   sortBy,
   onSortChange,
   onExport,
+  onRefresh,
+  loading,
 }) => {
   return (
     <div className="bg-white rounded-xl shadow-card p-6 mb-6">

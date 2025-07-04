@@ -11,13 +11,14 @@ export interface Candidate {
   id: string;
   name: string;
   email: string;
-  phone: string;
+  phone?: string; // made optional for compatibility
   position: string;
   status: 'pending' | 'interviewed' | 'approved' | 'rejected';
   resume_url?: string;
   notes?: string;
   created_at: string;
   updated_at: string;
+  address?: string; // added for export compatibility
 }
 
 export interface Job {
