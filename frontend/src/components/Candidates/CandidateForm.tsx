@@ -29,12 +29,17 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
 }) => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [saveAndContinue, setSaveAndContinue] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const isEditing = !!candidate;
+
+  console.log('📝 CandidateForm - Modo:', isEditing ? 'EDIÇÃO' : 'CRIAÇÃO');
+  console.log('📝 Candidato:', candidate);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
+    reset,
   } = useForm<FormData>({
     defaultValues: candidate ? {
       first_name: candidate.name.split(' ')[0] || '',
@@ -60,28 +65,66 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      console.log('📁 Arquivo selecionado:', file.name);
       setUploadedFile(file);
     }
   };
 
   const onFormSubmit = async (data: FormData) => {
-    const formData = {
-      ...data,
-      name: `${data.first_name} ${data.last_name}`.trim(),
-      photo_url: uploadedFile ? URL.createObjectURL(uploadedFile) : candidate?.photo_url,
-    };
-    
-    await onSubmit(formData);
-    
-    if (saveAndContinue && !isEditing) {
-      // Reset form for new candidate
-      window.location.reload();
+    if (submitting) {
+      console.log('⚠️ Já está enviando, ignorando...');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      console.log('📤 Enviando formulário:', data);
+
+      const formData: Partial<Candidate> = {
+        name: `${data.first_name} ${data.last_name}`.trim(),
+        email: data.email,
+        phone: data.phone || undefined,
+        address: data.address || undefined,
+        summary: data.summary || undefined,
+        linkedin: data.linkedin || undefined,
+        status: data.status,
+        photo_url: uploadedFile ? URL.createObjectURL(uploadedFile) : candidate?.photo_url,
+      };
+      
+      console.log('📦 Dados preparados:', formData);
+      
+      // Chamar função de submit do pai
+      await onSubmit(formData);
+      
+      console.log('✅ Formulário enviado com sucesso');
+      
+      // Se não é edição e é "salvar e continuar", limpar formulário
+      if (saveAndContinue && !isEditing) {
+        console.log('🔄 Limpando formulário para novo candidato');
+        reset();
+        setUploadedFile(null);
+        setSaveAndContinue(false);
+      }
+      
+    } catch (error) {
+      console.error('❌ Erro no envio do formulário:', error);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleSaveAndContinue = () => {
+    console.log('➡️ Salvar e continuar clicado');
     setSaveAndContinue(true);
     handleSubmit(onFormSubmit)();
+  };
+
+  const handleCancel = () => {
+    console.log('❌ Cancelando formulário');
+    reset();
+    setUploadedFile(null);
+    setSaveAndContinue(false);
+    onCancel();
   };
 
   return (
@@ -92,7 +135,7 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
             {isEditing ? 'Editar Candidato' : 'Novo Candidato'}
           </h2>
           <button
-            onClick={onCancel}
+            onClick={handleCancel}
             className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors"
           >
             <X className="h-5 w-5" />
@@ -115,6 +158,9 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
                     src={candidate.photo_url}
                     alt={candidate.name}
                     className="h-full w-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
                   />
                 ) : (
                   <User className="h-8 w-8 text-gray-400" />
@@ -197,24 +243,15 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
 
             <div>
               <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                Telefone *
+                Telefone
               </label>
               <input
                 type="tel"
                 id="phone"
-                {...register('phone', {
-                  required: 'Telefone é obrigatório',
-                  pattern: {
-                    value: /^\(\d{2}\)\s\d{4,5}-\d{4}$/,
-                    message: 'Formato: (11) 99999-9999',
-                  },
-                })}
+                {...register('phone')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                 placeholder="(11) 99999-9999"
               />
-              {errors.phone && (
-                <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>
-              )}
             </div>
 
             <div className="md:col-span-2">
@@ -237,18 +274,10 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
               <input
                 type="url"
                 id="linkedin"
-                {...register('linkedin', {
-                  pattern: {
-                    value: /^https:\/\/(www\.)?linkedin\.com\/in\/[a-zA-Z0-9-]+\/?$/,
-                    message: 'URL do LinkedIn inválida',
-                  },
-                })}
+                {...register('linkedin')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                 placeholder="https://linkedin.com/in/joaosilva"
               />
-              {errors.linkedin && (
-                <p className="mt-1 text-sm text-red-600">{errors.linkedin.message}</p>
-              )}
             </div>
 
             <div>
@@ -284,19 +313,21 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
           <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
             <button
               type="button"
-              onClick={onCancel}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              onClick={handleCancel}
+              disabled={submitting || loading}
+              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
             >
               Cancelar
             </button>
+            
             {!isEditing && (
               <button
                 type="button"
                 onClick={handleSaveAndContinue}
-                disabled={loading}
+                disabled={submitting || loading}
                 className="flex items-center space-x-2 px-4 py-2 bg-secondary-600 text-white rounded-lg hover:bg-secondary-700 focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? (
+                {submitting && saveAndContinue ? (
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <>
@@ -307,12 +338,13 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
                 )}
               </button>
             )}
+            
             <button
               type="submit"
-              disabled={loading}
+              disabled={submitting || loading}
               className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? (
+              {submitting || loading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <>

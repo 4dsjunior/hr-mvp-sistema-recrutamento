@@ -99,30 +99,36 @@ const frontendToBackend = (candidate: Partial<CandidateFrontend>) => {
   };
 };
 
-// CORREÇÃO: Mapeamento de status mais robusto
+// CORREÇÃO: Mapeamento de status corrigido baseado nos dados reais
 const mapStatus = (backendStatus: string): CandidateFrontend['status'] => {
-  const statusMap: { [key: string]: CandidateFrontend['status'] } = {
-    'active': 'pending',
-    'pending': 'pending',
-    'inactive': 'rejected',
-    'rejected': 'rejected',
-    'interviewed': 'interviewed',
-    'approved': 'approved',
-    'hired': 'approved',
-  };
-  
-  return statusMap[backendStatus] || 'pending';
+  switch (backendStatus?.toLowerCase()) {
+    case 'active':
+      return 'pending';
+    case 'inactive':
+      return 'rejected';
+    case 'interviewed':
+      return 'interviewed';
+    case 'approved':
+    case 'hired':
+      return 'approved';
+    default:
+      return 'pending';
+  }
 };
 
 const mapStatusToBackend = (frontendStatus?: CandidateFrontend['status']): string => {
-  const statusMap: { [key: string]: string } = {
-    'pending': 'active',
-    'interviewed': 'active', 
-    'approved': 'active',
-    'rejected': 'inactive',
-  };
-  
-  return statusMap[frontendStatus || 'pending'] || 'active';
+  switch (frontendStatus) {
+    case 'pending':
+      return 'active';
+    case 'rejected':
+      return 'inactive';
+    case 'interviewed':
+      return 'interviewed';
+    case 'approved':
+      return 'approved';
+    default:
+      return 'active';
+  }
 };
 
 // CORREÇÃO: Extração de posição melhorada
@@ -131,7 +137,7 @@ const extractPosition = (summary?: string): string => {
   
   const positions = [
     { keywords: ['desenvolvedor', 'developer', 'dev'], title: 'Desenvolvedor' },
-    { keywords: ['designer', 'design'], title: 'Designer' },
+    { keywords: ['designer', 'design', 'ux'], title: 'Designer' },
     { keywords: ['analista', 'analyst'], title: 'Analista' },
     { keywords: ['gerente', 'manager'], title: 'Gerente' },
     { keywords: ['coordenador', 'coordinator'], title: 'Coordenador' },
@@ -139,7 +145,7 @@ const extractPosition = (summary?: string): string => {
     { keywords: ['frontend', 'front-end'], title: 'Desenvolvedor Frontend' },
     { keywords: ['backend', 'back-end'], title: 'Desenvolvedor Backend' },
     { keywords: ['fullstack', 'full-stack'], title: 'Desenvolvedor Fullstack' },
-    { keywords: ['ux', 'ui', 'user experience'], title: 'Designer UX/UI' },
+    { keywords: ['junior'], title: 'Desenvolvedor Junior' },
   ];
   
   const lowerSummary = summary.toLowerCase();
@@ -153,7 +159,7 @@ const extractPosition = (summary?: string): string => {
   return 'Candidato';
 };
 
-// CORREÇÃO: Serviços com melhor tratamento de erro
+// CORREÇÃO: Serviços com melhor tratamento de erro e logging
 export const candidatesApi = {
   // Testar conexão
   test: async (): Promise<boolean> => {
@@ -176,7 +182,9 @@ export const candidatesApi = {
         return [];
       }
       
-      return response.data.map(backendToFrontend);
+      const converted = response.data.map(backendToFrontend);
+      console.log('✅ Candidatos convertidos:', converted);
+      return converted;
     } catch (error: any) {
       console.error('Erro ao buscar candidatos:', error);
       throw new Error(error.response?.data?.error || 'Erro ao carregar candidatos');
@@ -187,7 +195,9 @@ export const candidatesApi = {
   getById: async (id: string): Promise<CandidateFrontend> => {
     try {
       const response = await api.get(`/candidates/${id}`);
-      return backendToFrontend(response.data);
+      const converted = backendToFrontend(response.data);
+      console.log('✅ Candidato individual convertido:', converted);
+      return converted;
     } catch (error: any) {
       console.error('Erro ao buscar candidato:', error);
       throw new Error(error.response?.data?.error || 'Erro ao buscar candidato');
@@ -201,7 +211,9 @@ export const candidatesApi = {
       console.log('📤 Enviando dados para criar candidato:', backendData);
       
       const response = await api.post('/candidates', backendData);
-      return backendToFrontend(response.data);
+      const converted = backendToFrontend(response.data);
+      console.log('✅ Candidato criado e convertido:', converted);
+      return converted;
     } catch (error: any) {
       console.error('Erro ao criar candidato:', error);
       throw new Error(error.response?.data?.error || 'Erro ao criar candidato');
@@ -215,7 +227,9 @@ export const candidatesApi = {
       console.log('📤 Enviando dados para atualizar candidato:', backendData);
       
       const response = await api.put(`/candidates/${id}`, backendData);
-      return backendToFrontend(response.data);
+      const converted = backendToFrontend(response.data);
+      console.log('✅ Candidato atualizado e convertido:', converted);
+      return converted;
     } catch (error: any) {
       console.error('Erro ao atualizar candidato:', error);
       throw new Error(error.response?.data?.error || 'Erro ao atualizar candidato');
@@ -225,7 +239,9 @@ export const candidatesApi = {
   // Deletar candidato
   delete: async (id: string): Promise<boolean> => {
     try {
+      console.log('🗑️ Deletando candidato ID:', id);
       await api.delete(`/candidates/${id}`);
+      console.log('✅ Candidato deletado com sucesso');
       return true;
     } catch (error: any) {
       console.error('Erro ao deletar candidato:', error);
@@ -238,9 +254,14 @@ export const candidatesApi = {
     try {
       const params = new URLSearchParams();
       if (query.trim()) params.append('q', query.trim());
-      if (status) params.append('status', mapStatusToBackend(status as CandidateFrontend['status']));
+      if (status) {
+        const backendStatus = mapStatusToBackend(status as CandidateFrontend['status']);
+        params.append('status', backendStatus);
+      }
       
       const url = `/candidates/search${params.toString() ? `?${params}` : ''}`;
+      console.log('🔍 Buscando candidatos:', url);
+      
       const response = await api.get(url);
       
       if (!Array.isArray(response.data)) {
@@ -248,7 +269,9 @@ export const candidatesApi = {
         return [];
       }
       
-      return response.data.map(backendToFrontend);
+      const converted = response.data.map(backendToFrontend);
+      console.log('✅ Candidatos da busca convertidos:', converted);
+      return converted;
     } catch (error: any) {
       console.error('Erro ao buscar candidatos:', error);
       throw new Error(error.response?.data?.error || 'Erro na busca');

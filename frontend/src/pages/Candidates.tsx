@@ -28,7 +28,7 @@ const Candidates: React.FC = () => {
   const [totalItems, setTotalItems] = useState(0);
   const itemsPerPage = 10;
 
-  const { toasts, removeToast, showSuccess, showError, showInfo } = useToast();
+  const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
 
   // Debounced search
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
@@ -36,15 +36,19 @@ const Candidates: React.FC = () => {
   const fetchCandidates = useCallback(async () => {
     try {
       setLoading(true);
+      console.log('🔄 Carregando candidatos...');
       
       let results: Candidate[];
       
-      // Se há filtros, usar search, senão usar getAll
       if (searchQuery || statusFilter) {
+        console.log('🔍 Buscando com filtros:', { searchQuery, statusFilter });
         results = await candidatesApi.search(searchQuery, statusFilter);
       } else {
+        console.log('📋 Carregando todos os candidatos');
         results = await candidatesApi.getAll();
       }
+
+      console.log('✅ Candidatos carregados:', results.length);
 
       // Apply sorting
       results.sort((a, b) => {
@@ -74,7 +78,7 @@ const Candidates: React.FC = () => {
       setCandidates(paginatedCandidates);
       
     } catch (error: any) {
-      console.error('Erro ao carregar candidatos:', error);
+      console.error('❌ Erro ao carregar candidatos:', error);
       showError('Erro ao carregar candidatos', error.message);
     } finally {
       setLoading(false);
@@ -87,6 +91,7 @@ const Candidates: React.FC = () => {
 
   // Debounced search
   const handleSearchChange = (query: string) => {
+    console.log('🔍 Mudança na busca:', query);
     setSearchQuery(query);
     setCurrentPage(1);
     
@@ -102,65 +107,106 @@ const Candidates: React.FC = () => {
   };
 
   const handleCreateCandidate = () => {
+    console.log('➕ Abrindo formulário para novo candidato');
     setEditingCandidate(null);
     setShowForm(true);
   };
 
   const handleEditCandidate = (candidate: Candidate) => {
+    console.log('✏️ Editando candidato:', candidate.id);
     setEditingCandidate(candidate);
     setShowForm(true);
-    setShowModal(false);
+    setShowModal(false); // Fechar modal se estiver aberto
   };
 
-  const handleViewCandidate = (candidate: Candidate) => {
-    setSelectedCandidate(candidate);
-    setShowModal(true);
+  const handleViewCandidate = async (candidate: Candidate) => {
+    console.log('👁️ Visualizando candidato:', candidate.id);
+    try {
+      // SEMPRE buscar dados atualizados do servidor
+      const updatedCandidate = await candidatesApi.getById(candidate.id);
+      console.log('✅ Dados atualizados carregados:', updatedCandidate);
+      setSelectedCandidate(updatedCandidate);
+      setShowModal(true);
+    } catch (error: any) {
+      console.error('❌ Erro ao carregar candidato atualizado:', error);
+      setSelectedCandidate(candidate); // Fallback para dados locais
+      setShowModal(true);
+    }
   };
 
   const handleDeleteCandidate = async (candidate: Candidate) => {
     if (window.confirm(`Tem certeza que deseja excluir o candidato ${candidate.name}?`)) {
       try {
+        console.log('🗑️ Excluindo candidato:', candidate.id);
+        
+        // Fechar modal se estiver aberto
+        setShowModal(false);
+        setSelectedCandidate(null);
+        
         await candidatesApi.delete(candidate.id);
+        console.log('✅ Candidato excluído com sucesso');
+        
+        // Mostrar mensagem de sucesso
         showSuccess('Candidato excluído', `${candidate.name} foi removido com sucesso.`);
-        fetchCandidates();
+        
+        // Recarregar lista IMEDIATAMENTE
+        console.log('🔄 Recarregando lista após exclusão');
+        setCurrentPage(1);
+        await fetchCandidates();
+        
       } catch (error: any) {
-        console.error('Erro ao excluir candidato:', error);
+        console.error('❌ Erro ao excluir candidato:', error);
         showError('Erro ao excluir candidato', error.message);
       }
     }
   };
 
   const handleSubmitCandidate = async (data: Partial<Candidate>) => {
+    console.log('💾 Iniciando salvamento de candidato...', data);
+    
     try {
       setFormLoading(true);
       
       if (editingCandidate) {
-        // Update existing candidate
+        console.log('🔄 Modo EDIÇÃO - ID:', editingCandidate.id);
         await candidatesApi.update(editingCandidate.id, data);
+        console.log('✅ Candidato ATUALIZADO com sucesso');
         showSuccess('Candidato atualizado', `${data.name} foi atualizado com sucesso.`);
       } else {
-        // Create new candidate
+        console.log('➕ Modo CRIAÇÃO');
         await candidatesApi.create(data);
+        console.log('✅ Candidato CRIADO com sucesso');
         showSuccess('Candidato criado', `${data.name} foi adicionado com sucesso.`);
       }
       
+      // PASSO 1: Fechar formulário IMEDIATAMENTE
+      console.log('🔒 Fechando formulário...');
       setShowForm(false);
       setEditingCandidate(null);
-      fetchCandidates();
-    } catch (error: any) {
-      console.error('Erro ao salvar candidato:', error);
-      showError('Erro ao salvar candidato', error.message);
-    } finally {
       setFormLoading(false);
+      
+      // PASSO 2: Recarregar lista
+      console.log('🔄 Recarregando lista...');
+      setCurrentPage(1);
+      await fetchCandidates();
+      
+      console.log('🎉 Processo concluído com sucesso!');
+      
+    } catch (error: any) {
+      console.error('❌ ERRO no salvamento:', error);
+      showError('Erro ao salvar candidato', error.message);
+      setFormLoading(false); // Manter formulário aberto em caso de erro
     }
   };
 
   const handleExport = async () => {
     try {
-      // For now, create a simple CSV export
+      console.log('📄 Exportando candidatos...');
+      const allCandidates = await candidatesApi.getAll();
+      
       const csvContent = [
         ['Nome', 'Email', 'Telefone', 'Posição', 'Status', 'Endereço', 'Data de Cadastro'],
-        ...candidates.map(c => [
+        ...allCandidates.map(c => [
           c.name,
           c.email,
           c.phone || '',
@@ -183,14 +229,15 @@ const Candidates: React.FC = () => {
       
       showSuccess('Exportação concluída', 'Arquivo CSV baixado com sucesso.');
     } catch (error: any) {
-      console.error('Erro ao exportar candidatos:', error);
+      console.error('❌ Erro ao exportar candidatos:', error);
       showError('Erro na exportação', error.message);
     }
   };
 
-  const handleRefresh = () => {
-    fetchCandidates();
-    showInfo('Lista atualizada', 'Dados dos candidatos foram recarregados.');
+  const handleRefresh = async () => {
+    console.log('🔄 Atualizando lista manualmente');
+    await fetchCandidates();
+    showSuccess('Lista atualizada', 'Dados dos candidatos foram recarregados.');
   };
 
   return (
@@ -216,11 +263,13 @@ const Candidates: React.FC = () => {
         onSearchChange={handleSearchChange}
         statusFilter={statusFilter}
         onStatusFilterChange={(status) => {
+          console.log('🏷️ Filtro de status alterado:', status);
           setStatusFilter(status);
           setCurrentPage(1);
         }}
         sortBy={sortBy}
         onSortChange={(sort) => {
+          console.log('🔀 Ordenação alterada:', sort);
           setSortBy(sort);
           setCurrentPage(1);
         }}
@@ -243,7 +292,10 @@ const Candidates: React.FC = () => {
           totalPages={totalPages}
           totalItems={totalItems}
           itemsPerPage={itemsPerPage}
-          onPageChange={setCurrentPage}
+          onPageChange={(page) => {
+            console.log('📄 Mudando para página:', page);
+            setCurrentPage(page);
+          }}
         />
       )}
 
@@ -252,6 +304,7 @@ const Candidates: React.FC = () => {
           candidate={editingCandidate || undefined}
           onSubmit={handleSubmitCandidate}
           onCancel={() => {
+            console.log('❌ Cancelando formulário');
             setShowForm(false);
             setEditingCandidate(null);
           }}
@@ -262,7 +315,11 @@ const Candidates: React.FC = () => {
       {showModal && selectedCandidate && (
         <CandidateModal
           candidate={selectedCandidate}
-          onClose={() => setShowModal(false)}
+          onClose={() => {
+            console.log('❌ Fechando modal');
+            setShowModal(false);
+            setSelectedCandidate(null);
+          }}
           onEdit={handleEditCandidate}
         />
       )}

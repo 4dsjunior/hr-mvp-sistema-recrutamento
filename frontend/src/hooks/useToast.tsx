@@ -1,21 +1,37 @@
 import { useState, useCallback } from 'react';
-import { ToastProps } from '../components/UI/Toast';
+
+export interface ToastItem {
+  id: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+  title: string;
+  message?: string;
+  onClose: (id: string) => void;
+}
 
 export const useToast = () => {
-  const [toasts, setToasts] = useState<ToastProps[]>([]);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const removeToast = useCallback((id: string) => {
+    console.log('🗑️ Removendo toast:', id);
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
-  const addToast = useCallback((toast: Omit<ToastProps, 'id' | 'onClose'>) => {
+  const addToast = useCallback((toast: Omit<ToastItem, 'id' | 'onClose'>) => {
     const id = Date.now().toString();
-    const newToast: ToastProps = {
+    console.log('➕ Adicionando toast:', toast.title);
+    
+    const newToast: ToastItem = {
       ...toast,
       id,
       onClose: removeToast,
     };
+    
     setToasts((prev) => [...prev, newToast]);
+    
+    // Auto-remove após 5 segundos
+    setTimeout(() => {
+      removeToast(id);
+    }, 5000);
   }, [removeToast]);
 
   const showSuccess = useCallback((title: string, message?: string) => {
@@ -34,15 +50,6 @@ export const useToast = () => {
     addToast({ type: 'info', title, message });
   }, [addToast]);
 
-  // Função legacy para compatibilidade (se necessário)
-  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
-    if (type === 'success') {
-      showSuccess(message);
-    } else {
-      showError(message);
-    }
-  }, [showSuccess, showError]);
-
   return {
     toasts,
     removeToast,
@@ -50,6 +57,5 @@ export const useToast = () => {
     showError,
     showWarning,
     showInfo,
-    showToast, // Para compatibilidade
   };
 };

@@ -1,3 +1,4 @@
+// frontend/src/components/Candidates/CandidatesFilters.tsx - VERSÃO LIMPA
 import React from 'react';
 import { Search, Filter, Download, RefreshCw } from 'lucide-react';
 
@@ -9,13 +10,8 @@ interface CandidatesFiltersProps {
   sortBy: string;
   onSortChange: (sort: string) => void;
   onExport: () => void;
-<<<<<<< HEAD
-  onRefresh: () => void; // added for compatibility with Candidates.tsx
-  loading: boolean; // added for compatibility
-=======
   onRefresh: () => void;
   loading?: boolean;
->>>>>>> 7f531d6f5fd857414939463899b888cc5aefc78f
 }
 
 const CandidatesFilters: React.FC<CandidatesFiltersProps> = ({

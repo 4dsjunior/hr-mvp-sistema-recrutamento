@@ -1,4 +1,4 @@
-// 1. CORREÇÃO: backend/app/routes.py - Ajustar formato de resposta
+# backend/app/routes.py - VERSÃO CORRIGIDA (sem comentários JS)
 from flask import Blueprint, request, jsonify
 from supabase import create_client
 import os
@@ -16,7 +16,7 @@ supabase = create_client(
 def test_connection():
     return jsonify({'message': 'API funcionando!', 'status': 'ok'})
 
-# CORRIGIDO: Candidates endpoints com formato consistente
+# Candidates endpoints com formato consistente
 @api.route('/candidates', methods=['GET'])
 def get_candidates():
     try:
@@ -89,7 +89,7 @@ def search_candidates():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# 2. NOVO: Endpoint para métricas do dashboard
+# Endpoint para métricas do dashboard
 @api.route('/dashboard/metrics', methods=['GET'])
 def get_dashboard_metrics():
     try:
@@ -97,8 +97,8 @@ def get_dashboard_metrics():
         candidates_response = supabase.table('candidates').select('id').execute()
         total_candidates = len(candidates_response.data)
         
-        # Vagas ativas (adicionar quando criar tabela jobs)
-        active_jobs = 8  # Mock por enquanto
+        # Vagas ativas (mock por enquanto)
+        active_jobs = 8
         
         # Candidaturas este mês
         from datetime import datetime, timedelta
