@@ -4,6 +4,10 @@ import { ToastProps } from '../components/UI/Toast';
 export const useToast = () => {
   const [toasts, setToasts] = useState<ToastProps[]>([]);
 
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  }, []);
+
   const addToast = useCallback((toast: Omit<ToastProps, 'id' | 'onClose'>) => {
     const id = Date.now().toString();
     const newToast: ToastProps = {
@@ -12,11 +16,7 @@ export const useToast = () => {
       onClose: removeToast,
     };
     setToasts((prev) => [...prev, newToast]);
-  }, []);
-
-  const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  }, []);
+  }, [removeToast]);
 
   const showSuccess = useCallback((title: string, message?: string) => {
     addToast({ type: 'success', title, message });
@@ -34,6 +34,15 @@ export const useToast = () => {
     addToast({ type: 'info', title, message });
   }, [addToast]);
 
+  // Função legacy para compatibilidade (se necessário)
+  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    if (type === 'success') {
+      showSuccess(message);
+    } else {
+      showError(message);
+    }
+  }, [showSuccess, showError]);
+
   return {
     toasts,
     removeToast,
@@ -41,5 +50,6 @@ export const useToast = () => {
     showError,
     showWarning,
     showInfo,
+    showToast, // Para compatibilidade
   };
 };
