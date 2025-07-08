@@ -48,19 +48,53 @@ def test_connection():
 
 @api.route('/candidates', methods=['GET'])
 def get_candidates():
-    """Listar todos os candidatos"""
+    """Listar todos os candidatos com suporte a filtros básicos"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
-            
+        
+        # Parâmetros de consulta
+        search = request.args.get('search', '').strip()
+        status = request.args.get('status', '').strip()
+        
+        print(f"📊 GET /candidates - Search: '{search}', Status: '{status}'")
+        
+        # Query base - sempre buscar todos primeiro
         response = supabase.table('candidates').select('*').order('created_at', desc=True).execute()
         
         if response.data is None:
+            print("⚠️ Nenhum dado retornado do Supabase")
             return jsonify([])
-            
-        return jsonify(response.data)
+        
+        # Filtrar no Python se necessário (mais compatível)
+        filtered_data = response.data
+        
+        if search:
+            search_lower = search.lower()
+            filtered_data = [
+                candidate for candidate in filtered_data
+                if (
+                    search_lower in candidate.get('first_name', '').lower() or
+                    search_lower in candidate.get('last_name', '').lower() or
+                    search_lower in candidate.get('email', '').lower()
+                )
+            ]
+        
+        if status and status != 'all':
+            filtered_data = [
+                candidate for candidate in filtered_data
+                if candidate.get('status') == status
+            ]
+        
+        result_count = len(filtered_data)
+        print(f"✅ {result_count} candidatos retornados")
+        
+        return jsonify(filtered_data)
+        
     except Exception as e:
         print(f"❌ Erro ao buscar candidatos: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @api.route('/candidates', methods=['POST'])
@@ -177,28 +211,43 @@ def search_candidates():
         query = request.args.get('q', '').strip()
         status = request.args.get('status', '').strip()
         
-        base_query = supabase.table('candidates').select('*')
+        print(f"🔍 Busca recebida - Query: '{query}', Status: '{status}'")
         
-        # Aplicar filtros
-        if query:
-            base_query = base_query.or_(
-                f'first_name.ilike.%{query}%,'
-                f'last_name.ilike.%{query}%,'
-                f'email.ilike.%{query}%'
-            )
-        
-        if status:
-            base_query = base_query.eq('status', status)
-            
-        response = base_query.order('created_at', desc=True).execute()
+        # Buscar todos os candidatos primeiro
+        response = supabase.table('candidates').select('*').order('created_at', desc=True).execute()
         
         if response.data is None:
             return jsonify([])
-            
-        return jsonify(response.data)
+        
+        # Filtrar no Python (mais compatível com todas as versões do Supabase)
+        filtered_data = response.data
+        
+        if query:
+            query_lower = query.lower()
+            filtered_data = [
+                candidate for candidate in filtered_data
+                if (
+                    query_lower in candidate.get('first_name', '').lower() or
+                    query_lower in candidate.get('last_name', '').lower() or
+                    query_lower in candidate.get('email', '').lower()
+                )
+            ]
+        
+        if status and status != 'all':
+            filtered_data = [
+                candidate for candidate in filtered_data
+                if candidate.get('status') == status
+            ]
+        
+        result_count = len(filtered_data)
+        print(f"✅ Busca concluída - {result_count} candidatos encontrados")
+        
+        return jsonify(filtered_data)
         
     except Exception as e:
-        print(f"❌ Erro ao buscar candidatos: {e}")
+        print(f"❌ Erro na busca de candidatos: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
@@ -320,21 +369,44 @@ def get_jobs():
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
-            
+        
+        print("💼 Buscando vagas no Supabase...")
+        
+        # Buscar vagas
         response = supabase.table('jobs').select('*').order('created_at', desc=True).execute()
         
         if response.data is None:
+            print("⚠️ Nenhuma vaga encontrada")
             return jsonify([])
         
-        # Adicionar contagem de candidatos para cada vaga (se tabela applications existir)
+        # Adicionar campos extras para compatibilidade
         jobs_with_counts = []
         for job in response.data:
-            job['candidates_count'] = 0  # Placeholder até implementarmos applications
-            jobs_with_counts.append(job)
+            # Garantir que todos os campos existem
+            job_data = {
+                'id': job.get('id'),
+                'title': job.get('title', 'Título não informado'),
+                'description': job.get('description', ''),
+                'location': job.get('location', 'Local não informado'),
+                'department': job.get('department', ''),
+                'employment_type': job.get('employment_type', 'full-time'),
+                'status': job.get('status', 'active'),
+                'salary_min': job.get('salary_min', 0),
+                'salary_max': job.get('salary_max', 0),
+                'requirements': job.get('requirements', ''),
+                'created_at': job.get('created_at'),
+                'updated_at': job.get('updated_at'),
+                'candidates_count': 0  # Placeholder
+            }
+            jobs_with_counts.append(job_data)
         
+        print(f"✅ {len(jobs_with_counts)} vagas retornadas")
         return jsonify(jobs_with_counts)
+        
     except Exception as e:
         print(f"❌ Erro ao buscar vagas: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @api.route('/jobs', methods=['POST'])
@@ -345,39 +417,90 @@ def create_job():
             return jsonify({'error': 'Database not connected'}), 500
             
         data = request.json
+        print(f"💼 Criando nova vaga: {data}")
         
         # Validar campos obrigatórios
-        required_fields = ['title', 'description', 'location']
+        required_fields = ['title']
         for field in required_fields:
             if not data.get(field):
                 return jsonify({'error': f'Campo {field} é obrigatório'}), 400
         
-        # Adicionar timestamps e defaults
+        # Preparar dados com valores padrão
         now = datetime.now().isoformat()
-        data['created_at'] = now
-        data['updated_at'] = now
-        
-        # Valores padrão
-        if 'status' not in data:
-            data['status'] = 'active'
-        if 'employment_type' not in data:
-            data['employment_type'] = 'full-time'
+        job_data = {
+            'title': data['title'],
+            'description': data.get('description', ''),
+            'location': data.get('location', 'Remoto'),
+            'department': data.get('department', ''),
+            'employment_type': data.get('employment_type', 'full-time'),
+            'status': data.get('status', 'active'),
+            'salary_min': data.get('salary_min', 0),
+            'salary_max': data.get('salary_max', 0),
+            'requirements': data.get('requirements', ''),
+            'created_at': now,
+            'updated_at': now
+        }
         
         # Limpar campos vazios
-        data = {k: v for k, v in data.items() if v is not None and v != ''}
+        job_data = {k: v for k, v in job_data.items() if v is not None and v != ''}
         
-        response = supabase.table('jobs').insert(data).execute()
+        response = supabase.table('jobs').insert(job_data).execute()
         
         if response.data:
-            job_data = response.data[0]
-            job_data['candidates_count'] = 0  # Nova vaga sem candidatos
-            return jsonify(job_data), 201
+            job_created = response.data[0]
+            job_created['candidates_count'] = 0  # Nova vaga sem candidatos
+            print(f"✅ Vaga criada com ID: {job_created.get('id')}")
+            return jsonify(job_created), 201
         else:
             return jsonify({'error': 'Erro ao criar vaga'}), 500
             
     except Exception as e:
         print(f"❌ Erro ao criar vaga: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# DEBUG ENDPOINTS
+# =============================================================================
+
+@api.route('/debug/jobs', methods=['GET'])
+def debug_jobs():
+    """Debug da tabela jobs"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        # Tentar acessar a tabela jobs
+        try:
+            response = supabase.table('jobs').select('*').execute()
+            
+            debug_info = {
+                'table_exists': True,
+                'jobs_count': len(response.data) if response.data else 0,
+                'sample_job': response.data[0] if response.data else None,
+                'all_jobs': response.data,
+                'supabase_connected': True,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            return jsonify(debug_info)
+            
+        except Exception as table_error:
+            return jsonify({
+                'table_exists': False,
+                'error': str(table_error),
+                'message': 'Tabela jobs não existe ou não tem dados',
+                'supabase_connected': True,
+                'timestamp': datetime.now().isoformat()
+            })
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'supabase_connected': False,
+            'timestamp': datetime.now().isoformat()
+        }), 500
 
 # =============================================================================
 # HEALTH CHECK
