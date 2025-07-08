@@ -1,62 +1,65 @@
-#!/usr/bin/env python
-# backend/app.py - Arquivo principal do Flask
+#!/usr/bin/env python3
 """
-Sistema HR MVP - Backend Flask
-Arquivo principal para inicializar o servidor Flask
+Sistema HR - MVP
+Aplicação Principal Flask
 """
 
 import os
-import sys
+from flask import Flask
+from flask_cors import CORS
 from dotenv import load_dotenv
 
 # Carregar variáveis de ambiente
 load_dotenv()
 
-# Adicionar o diretório atual ao Python path
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, current_dir)
+# Criar aplicação Flask
+app = Flask(__name__)
 
-try:
-    from app import create_app
+# Configurações
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
+app.config['DEBUG'] = os.getenv('DEBUG', 'True').lower() == 'true'
+
+# Configurar CORS
+CORS(app, 
+     origins=[
+         "http://localhost:3000",
+         "http://localhost:5173",
+         "http://127.0.0.1:3000", 
+         "http://127.0.0.1:5173"
+     ],
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+     allow_headers=['Content-Type', 'Authorization']
+)
+
+# Importar suas rotas do arquivo routes.py
+from routes import api
+app.register_blueprint(api, url_prefix='/api')
+
+@app.route('/')
+def index():
+    """Endpoint raiz para verificação"""
+    return {
+        'message': 'Sistema HR - API funcionando!',
+        'version': '1.0.0',
+        'status': 'active',
+        'endpoints': {
+            'test': '/api/test',
+            'candidates': '/api/candidates', 
+            'jobs': '/api/jobs',
+            'dashboard': '/api/dashboard/metrics'
+        }
+    }
+
+if __name__ == '__main__':
+    port = int(os.getenv('FLASK_PORT', 5000))
+    host = os.getenv('FLASK_HOST', '127.0.0.1')
+    debug = os.getenv('DEBUG', 'True').lower() == 'true'
     
-    # Criar a aplicação Flask
-    app = create_app()
+    print("🚀 INICIANDO SISTEMA HR - MVP")
+    print("============================")
+    print(f"🌐 URL: http://{host}:{port}")
+    print(f"🔧 Debug: {debug}")
+    print(f"📡 API: http://{host}:{port}/api")
+    print("============================")
     
-    if __name__ == '__main__':
-        print("🚀 Iniciando servidor Flask...")
-        print("📍 Backend rodando em: http://localhost:5000")
-        print("📋 API endpoints disponíveis:")
-        print("   GET  /api/test - Teste de conexão")
-        print("   GET  /api/candidates - Listar candidatos")
-        print("   POST /api/candidates - Criar candidato")
-        print("   GET  /api/jobs - Listar vagas")
-        print("   POST /api/jobs - Criar vaga")
-        print("   GET  /api/dashboard/metrics - Métricas do dashboard")
-        print("🔄 Pressione Ctrl+C para parar o servidor")
-        print("-" * 50)
-        
-        # Configurações do servidor
-        host = os.getenv('FLASK_HOST', '127.0.0.1')
-        port = int(os.getenv('FLASK_PORT', 5000))
-        debug = os.getenv('FLASK_ENV', 'development') == 'development'
-        
-        app.run(
-            host=host,
-            port=port,
-            debug=debug,
-            threaded=True
-        )
-        
-except ImportError as e:
-    print("❌ ERRO: Não foi possível importar a aplicação Flask")
-    print(f"   Detalhes: {e}")
-    print("💡 Soluções:")
-    print("   1. Verifique se o arquivo app/__init__.py existe")
-    print("   2. Instale as dependências: pip install -r requirements.txt")
-    print("   3. Ative o ambiente virtual: venv\\Scripts\\activate")
-    sys.exit(1)
-    
-except Exception as e:
-    print(f"❌ ERRO GERAL: {e}")
-    print("💡 Verifique as configurações e dependências")
-    sys.exit(1)
+    app.run(host=host, port=port, debug=debug)

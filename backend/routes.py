@@ -205,8 +205,6 @@ def search_candidates():
 # DASHBOARD METRICS
 # =============================================================================
 
-# Substitua a função get_dashboard_metrics no backend/app/routes.py
-
 @api.route('/dashboard/metrics', methods=['GET'])
 def get_dashboard_metrics():
     """Métricas do dashboard com dados reais do Supabase"""
@@ -312,78 +310,6 @@ def get_dashboard_metrics():
             'last_updated': datetime.now().isoformat()
         }), 200  # Não retornar erro 500 para não quebrar o frontend
 
-# Endpoint adicional para debug das métricas
-@api.route('/dashboard/debug', methods=['GET'])
-def debug_dashboard():
-    """Debug das métricas para desenvolvimento"""
-    try:
-        if not supabase:
-            return jsonify({'error': 'Database not connected'}), 500
-        
-        # Buscar dados brutos
-        candidates = supabase.table('candidates').select('*').execute()
-        
-        debug_info = {
-            'candidates_raw': candidates.data if candidates.data else [],
-            'candidates_count': len(candidates.data) if candidates.data else 0,
-            'supabase_connected': True,
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        # Tentar buscar vagas também
-        try:
-            jobs = supabase.table('jobs').select('*').execute()
-            debug_info['jobs_raw'] = jobs.data if jobs.data else []
-            debug_info['jobs_count'] = len(jobs.data) if jobs.data else 0
-        except:
-            debug_info['jobs_raw'] = []
-            debug_info['jobs_count'] = 0
-            debug_info['jobs_error'] = 'Tabela jobs não encontrada'
-        
-        return jsonify(debug_info)
-        
-    except Exception as e:
-        return jsonify({
-            'error': str(e),
-            'supabase_connected': False,
-            'timestamp': datetime.now().isoformat()
-        }), 500
-
-print("✅ Endpoint de métricas atualizado!")
-
-# =============================================================================
-# HEALTH CHECK
-# =============================================================================
-
-@api.route('/health', methods=['GET'])
-def health_check():
-    """Verificação de saúde da API"""
-    try:
-        status = {
-            'api': 'ok',
-            'database': 'disconnected',
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        if supabase:
-            # Teste de conexão simples
-            test_response = supabase.table('candidates').select('id').limit(1).execute()
-            status['database'] = 'connected'
-            status['candidates_count'] = len(test_response.data) if test_response.data else 0
-        
-        return jsonify(status)
-        
-    except Exception as e:
-        return jsonify({
-            'api': 'ok',
-            'database': 'error',
-            'error': str(e),
-            'timestamp': datetime.now().isoformat()
-        }), 500
-
-print("✅ Endpoints de candidatos carregados com sucesso!")
-# Adicionar estas rotas no final do arquivo backend/app/routes.py
-
 # =============================================================================
 # JOBS ENDPOINTS
 # =============================================================================
@@ -453,116 +379,34 @@ def create_job():
         print(f"❌ Erro ao criar vaga: {e}")
         return jsonify({'error': str(e)}), 500
 
-@api.route('/jobs/<int:job_id>', methods=['GET'])
-def get_job(job_id):
-    """Buscar vaga por ID"""
-    try:
-        if not supabase:
-            return jsonify({'error': 'Database not connected'}), 500
-            
-        response = supabase.table('jobs').select('*').eq('id', job_id).execute()
-        
-        if response.data:
-            job = response.data[0]
-            job['candidates_count'] = 0  # Placeholder
-            return jsonify(job)
-        else:
-            return jsonify({'error': 'Vaga não encontrada'}), 404
-            
-    except Exception as e:
-        print(f"❌ Erro ao buscar vaga: {e}")
-        return jsonify({'error': str(e)}), 500
+# =============================================================================
+# HEALTH CHECK
+# =============================================================================
 
-@api.route('/jobs/<int:job_id>', methods=['PUT'])
-def update_job(job_id):
-    """Atualizar vaga"""
+@api.route('/health', methods=['GET'])
+def health_check():
+    """Verificação de saúde da API"""
     try:
-        if not supabase:
-            return jsonify({'error': 'Database not connected'}), 500
-            
-        data = request.json
-        data['updated_at'] = datetime.now().isoformat()
+        status = {
+            'api': 'ok',
+            'database': 'disconnected',
+            'timestamp': datetime.now().isoformat()
+        }
         
-        # Limpar campos vazios
-        data = {k: v for k, v in data.items() if v is not None and v != ''}
+        if supabase:
+            # Teste de conexão simples
+            test_response = supabase.table('candidates').select('id').limit(1).execute()
+            status['database'] = 'connected'
+            status['candidates_count'] = len(test_response.data) if test_response.data else 0
         
-        response = supabase.table('jobs').update(data).eq('id', job_id).execute()
-        
-        if response.data:
-            job = response.data[0]
-            job['candidates_count'] = 0  # Placeholder
-            return jsonify(job)
-        else:
-            return jsonify({'error': 'Vaga não encontrada'}), 404
-            
-    except Exception as e:
-        print(f"❌ Erro ao atualizar vaga: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@api.route('/jobs/<int:job_id>', methods=['DELETE'])
-def delete_job(job_id):
-    """Excluir vaga"""
-    try:
-        if not supabase:
-            return jsonify({'error': 'Database not connected'}), 500
-            
-        # Verificar se existe
-        existing = supabase.table('jobs').select('id').eq('id', job_id).execute()
-        if not existing.data:
-            return jsonify({'error': 'Vaga não encontrada'}), 404
-            
-        response = supabase.table('jobs').delete().eq('id', job_id).execute()
-        return '', 204
+        return jsonify(status)
         
     except Exception as e:
-        print(f"❌ Erro ao deletar vaga: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            'api': 'ok',
+            'database': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
 
-@api.route('/jobs/search', methods=['GET'])
-def search_jobs():
-    """Buscar vagas com filtros"""
-    try:
-        if not supabase:
-            return jsonify({'error': 'Database not connected'}), 500
-            
-        query = request.args.get('q', '').strip()
-        status = request.args.get('status', '').strip()
-        department = request.args.get('department', '').strip()
-        employment_type = request.args.get('employment_type', '').strip()
-        
-        base_query = supabase.table('jobs').select('*')
-        
-        # Aplicar filtros
-        if query:
-            base_query = base_query.or_(
-                f'title.ilike.%{query}%,'
-                f'description.ilike.%{query}%'
-            )
-        
-        if status:
-            base_query = base_query.eq('status', status)
-            
-        if department:
-            base_query = base_query.eq('department', department)
-            
-        if employment_type:
-            base_query = base_query.eq('employment_type', employment_type)
-            
-        response = base_query.order('created_at', desc=True).execute()
-        
-        if response.data is None:
-            return jsonify([])
-        
-        # Adicionar contagem de candidatos
-        jobs_with_counts = []
-        for job in response.data:
-            job['candidates_count'] = 0  # Placeholder
-            jobs_with_counts.append(job)
-        
-        return jsonify(jobs_with_counts)
-        
-    except Exception as e:
-        print(f"❌ Erro ao buscar vagas: {e}")
-        return jsonify({'error': str(e)}), 500
-
-print("✅ Endpoints de vagas carregados com sucesso!")
+print("✅ Endpoints carregados com sucesso!")
