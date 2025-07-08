@@ -17,7 +17,7 @@ export const useToast = () => {
   }, []);
 
   const addToast = useCallback((toast: Omit<ToastItem, 'id' | 'onClose'>) => {
-    const id = `toast-${Date.now()}-${Math.random()}`;
+    const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     console.log('📢 Toast:', toast.type, '-', toast.title);
     
     const newToast: ToastItem = {
@@ -50,6 +50,10 @@ export const useToast = () => {
     addToast({ type: 'info', title, message });
   }, [addToast]);
 
+  const clearAll = useCallback(() => {
+    setToasts([]);
+  }, []);
+
   return {
     toasts,
     removeToast,
@@ -57,5 +61,6 @@ export const useToast = () => {
     showError,
     showWarning,
     showInfo,
+    clearAll,
   };
 };

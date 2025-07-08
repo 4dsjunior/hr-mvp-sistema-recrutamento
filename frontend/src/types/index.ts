@@ -11,11 +11,7 @@ export interface Candidate {
   id: string;
   name: string;
   email: string;
-<<<<<<< HEAD
-  phone?: string; // made optional for compatibility
-=======
   phone?: string;
->>>>>>> 7f531d6f5fd857414939463899b888cc5aefc78f
   position: string;
   status: 'pending' | 'interviewed' | 'approved' | 'rejected';
   photo_url?: string;
@@ -26,7 +22,6 @@ export interface Candidate {
   notes?: string;
   created_at: string;
   updated_at: string;
-  address?: string; // added for export compatibility
 }
 
 export interface Job {
@@ -36,17 +31,22 @@ export interface Job {
   status: 'open' | 'closed' | 'draft';
   description: string;
   requirements: string[];
+  location: string;
+  employment_type: 'full-time' | 'part-time' | 'contract' | 'freelance';
+  salary_min?: number;
+  salary_max?: number;
   created_at: string;
   updated_at: string;
+  candidates_count?: number;
 }
 
 export interface DashboardMetrics {
   total_candidates: number;
-  open_positions: number;
-  monthly_hires: number;
+  active_jobs: number;
+  monthly_applications: number;
   conversion_rate: number;
   pending_interviews: number;
-  recent_activity: ActivityItem[];
+  recent_activity?: ActivityItem[];
 }
 
 export interface ActivityItem {
@@ -70,4 +70,22 @@ export interface ApiResponse<T> {
   data?: T;
   message?: string;
   error?: string;
+}
+
+export interface CandidateFilters {
+  search?: string;
+  status?: string;
+  page?: number;
+  per_page?: number;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
+}
+
+export interface JobFilters {
+  search?: string;
+  status?: string;
+  department?: string;
+  employment_type?: string;
+  page?: number;
+  per_page?: number;
 }

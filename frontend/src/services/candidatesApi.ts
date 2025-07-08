@@ -1,9 +1,9 @@
-// frontend/src/services/candidatesApi.ts - VERSÃO CORRIGIDA
 import axios from 'axios';
+import { Candidate } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-// Configurar axios
+// Configurar axios com timeout e headers
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -12,7 +12,7 @@ const api = axios.create({
   timeout: 10000,
 });
 
-// Interceptor para logging
+// Interceptor para logging de requests
 api.interceptors.request.use(
   (config) => {
     console.log(`🚀 API Call: ${config.method?.toUpperCase()} ${config.url}`);
@@ -21,18 +21,19 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Interceptor para logging de responses
 api.interceptors.response.use(
   (response) => {
     console.log(`✅ API Response: ${response.status}`, response.data);
     return response;
   },
   (error) => {
-    console.error(`❌ API Error:`, error);
+    console.error(`❌ API Error:`, error.response?.data || error.message);
     return Promise.reject(error);
   }
 );
 
-// Interface para candidato conforme nosso backend
+// Interfaces para conversão Backend <-> Frontend
 interface CandidateBackend {
   id: number;
   first_name: string;
@@ -47,42 +48,26 @@ interface CandidateBackend {
   updated_at: string;
 }
 
-// Interface do frontend
-interface CandidateFrontend {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  position: string;
-  status: 'pending' | 'interviewed' | 'approved' | 'rejected';
-  photo_url?: string;
-  address?: string;
-  summary?: string;
-  linkedin?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-// CORREÇÃO: Funções de conversão melhoradas
-const backendToFrontend = (candidate: CandidateBackend): CandidateFrontend => {
+// Funções de conversão
+const backendToFrontend = (candidate: CandidateBackend): Candidate => {
   const fullName = `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim();
   
   return {
     id: candidate.id.toString(),
     name: fullName || 'Nome não informado',
     email: candidate.email,
-    phone: candidate.phone,
+    phone: candidate.phone || undefined,
     position: extractPosition(candidate.summary) || 'Candidato',
     status: mapStatus(candidate.status),
-    address: candidate.address,
-    summary: candidate.summary,
-    linkedin: candidate.linkedin_url,
+    address: candidate.address || undefined,
+    summary: candidate.summary || undefined,
+    linkedin: candidate.linkedin_url || undefined,
     created_at: candidate.created_at,
     updated_at: candidate.updated_at,
   };
 };
 
-const frontendToBackend = (candidate: Partial<CandidateFrontend>) => {
+const frontendToBackend = (candidate: Partial<Candidate>) => {
   const nameParts = (candidate.name || '').split(' ');
   const firstName = nameParts[0] || '';
   const lastName = nameParts.slice(1).join(' ') || '';
@@ -99,45 +84,38 @@ const frontendToBackend = (candidate: Partial<CandidateFrontend>) => {
   };
 };
 
-// CORREÇÃO: Mapeamento de status corrigido baseado nos dados reais
-const mapStatus = (backendStatus: string): CandidateFrontend['status'] => {
-  switch (backendStatus?.toLowerCase()) {
-    case 'active':
-      return 'pending';
-    case 'inactive':
-      return 'rejected';
-    case 'interviewed':
-      return 'interviewed';
-    case 'approved':
-    case 'hired':
-      return 'approved';
-    default:
-      return 'pending';
-  }
+// Mapeamento de status
+const mapStatus = (backendStatus: string): Candidate['status'] => {
+  const statusMap: Record<string, Candidate['status']> = {
+    'active': 'pending',
+    'inactive': 'rejected',
+    'interviewed': 'interviewed',
+    'approved': 'approved',
+    'hired': 'approved',
+    'rejected': 'rejected',
+  };
+  
+  return statusMap[backendStatus?.toLowerCase()] || 'pending';
 };
 
-const mapStatusToBackend = (frontendStatus?: CandidateFrontend['status']): string => {
-  switch (frontendStatus) {
-    case 'pending':
-      return 'active';
-    case 'rejected':
-      return 'inactive';
-    case 'interviewed':
-      return 'interviewed';
-    case 'approved':
-      return 'approved';
-    default:
-      return 'active';
-  }
+const mapStatusToBackend = (frontendStatus?: Candidate['status']): string => {
+  const statusMap: Record<string, string> = {
+    'pending': 'active',
+    'rejected': 'inactive',
+    'interviewed': 'interviewed',
+    'approved': 'approved',
+  };
+  
+  return statusMap[frontendStatus || 'pending'] || 'active';
 };
 
-// CORREÇÃO: Extração de posição melhorada
+// Extração inteligente de posição
 const extractPosition = (summary?: string): string => {
   if (!summary) return 'Candidato';
   
   const positions = [
     { keywords: ['desenvolvedor', 'developer', 'dev'], title: 'Desenvolvedor' },
-    { keywords: ['designer', 'design', 'ux'], title: 'Designer' },
+    { keywords: ['designer', 'design', 'ux', 'ui'], title: 'Designer' },
     { keywords: ['analista', 'analyst'], title: 'Analista' },
     { keywords: ['gerente', 'manager'], title: 'Gerente' },
     { keywords: ['coordenador', 'coordinator'], title: 'Coordenador' },
@@ -145,7 +123,10 @@ const extractPosition = (summary?: string): string => {
     { keywords: ['frontend', 'front-end'], title: 'Desenvolvedor Frontend' },
     { keywords: ['backend', 'back-end'], title: 'Desenvolvedor Backend' },
     { keywords: ['fullstack', 'full-stack'], title: 'Desenvolvedor Fullstack' },
-    { keywords: ['junior'], title: 'Desenvolvedor Junior' },
+    { keywords: ['qa', 'quality', 'teste'], title: 'QA Analyst' },
+    { keywords: ['devops', 'infrastructure'], title: 'DevOps Engineer' },
+    { keywords: ['data', 'scientist'], title: 'Data Scientist' },
+    { keywords: ['mobile', 'android', 'ios'], title: 'Desenvolvedor Mobile' },
   ];
   
   const lowerSummary = summary.toLowerCase();
@@ -159,7 +140,7 @@ const extractPosition = (summary?: string): string => {
   return 'Candidato';
 };
 
-// CORREÇÃO: Serviços com melhor tratamento de erro e logging
+// Serviços da API
 export const candidatesApi = {
   // Testar conexão
   test: async (): Promise<boolean> => {
@@ -172,8 +153,19 @@ export const candidatesApi = {
     }
   },
 
+  // Verificar saúde da API
+  health: async (): Promise<any> => {
+    try {
+      const response = await api.get('/health');
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao verificar saúde:', error);
+      return { api: 'error', database: 'error' };
+    }
+  },
+
   // Listar todos candidatos
-  getAll: async (): Promise<CandidateFrontend[]> => {
+  getAll: async (): Promise<Candidate[]> => {
     try {
       const response = await api.get('/candidates');
       
@@ -183,16 +175,17 @@ export const candidatesApi = {
       }
       
       const converted = response.data.map(backendToFrontend);
-      console.log('✅ Candidatos convertidos:', converted);
+      console.log(`✅ ${converted.length} candidatos convertidos`);
       return converted;
     } catch (error: any) {
       console.error('Erro ao buscar candidatos:', error);
-      throw new Error(error.response?.data?.error || 'Erro ao carregar candidatos');
+      const errorMessage = error.response?.data?.error || error.message || 'Erro ao carregar candidatos';
+      throw new Error(errorMessage);
     }
   },
 
   // Buscar candidato por ID
-  getById: async (id: string): Promise<CandidateFrontend> => {
+  getById: async (id: string): Promise<Candidate> => {
     try {
       const response = await api.get(`/candidates/${id}`);
       const converted = backendToFrontend(response.data);
@@ -200,13 +193,19 @@ export const candidatesApi = {
       return converted;
     } catch (error: any) {
       console.error('Erro ao buscar candidato:', error);
-      throw new Error(error.response?.data?.error || 'Erro ao buscar candidato');
+      const errorMessage = error.response?.data?.error || error.message || 'Erro ao buscar candidato';
+      throw new Error(errorMessage);
     }
   },
 
   // Criar novo candidato
-  create: async (candidateData: Partial<CandidateFrontend>): Promise<CandidateFrontend> => {
+  create: async (candidateData: Partial<Candidate>): Promise<Candidate> => {
     try {
+      // Validação básica
+      if (!candidateData.name || !candidateData.email) {
+        throw new Error('Nome e email são obrigatórios');
+      }
+
       const backendData = frontendToBackend(candidateData);
       console.log('📤 Enviando dados para criar candidato:', backendData);
       
@@ -216,12 +215,13 @@ export const candidatesApi = {
       return converted;
     } catch (error: any) {
       console.error('Erro ao criar candidato:', error);
-      throw new Error(error.response?.data?.error || 'Erro ao criar candidato');
+      const errorMessage = error.response?.data?.error || error.message || 'Erro ao criar candidato';
+      throw new Error(errorMessage);
     }
   },
 
   // Atualizar candidato
-  update: async (id: string, candidateData: Partial<CandidateFrontend>): Promise<CandidateFrontend> => {
+  update: async (id: string, candidateData: Partial<Candidate>): Promise<Candidate> => {
     try {
       const backendData = frontendToBackend(candidateData);
       console.log('📤 Enviando dados para atualizar candidato:', backendData);
@@ -232,30 +232,35 @@ export const candidatesApi = {
       return converted;
     } catch (error: any) {
       console.error('Erro ao atualizar candidato:', error);
-      throw new Error(error.response?.data?.error || 'Erro ao atualizar candidato');
+      const errorMessage = error.response?.data?.error || error.message || 'Erro ao atualizar candidato';
+      throw new Error(errorMessage);
     }
   },
 
   // Deletar candidato
-  delete: async (id: string): Promise<boolean> => {
+  delete: async (id: string): Promise<void> => {
     try {
       console.log('🗑️ Deletando candidato ID:', id);
       await api.delete(`/candidates/${id}`);
       console.log('✅ Candidato deletado com sucesso');
-      return true;
     } catch (error: any) {
       console.error('Erro ao deletar candidato:', error);
-      throw new Error(error.response?.data?.error || 'Erro ao deletar candidato');
+      const errorMessage = error.response?.data?.error || error.message || 'Erro ao deletar candidato';
+      throw new Error(errorMessage);
     }
   },
 
-  // Buscar candidatos
-  search: async (query: string, status?: string): Promise<CandidateFrontend[]> => {
+  // Buscar candidatos com filtros
+  search: async (query: string, status?: string): Promise<Candidate[]> => {
     try {
       const params = new URLSearchParams();
-      if (query.trim()) params.append('q', query.trim());
+      
+      if (query.trim()) {
+        params.append('q', query.trim());
+      }
+      
       if (status) {
-        const backendStatus = mapStatusToBackend(status as CandidateFrontend['status']);
+        const backendStatus = mapStatusToBackend(status as Candidate['status']);
         params.append('status', backendStatus);
       }
       
@@ -270,11 +275,35 @@ export const candidatesApi = {
       }
       
       const converted = response.data.map(backendToFrontend);
-      console.log('✅ Candidatos da busca convertidos:', converted);
+      console.log(`✅ ${converted.length} candidatos da busca convertidos`);
       return converted;
     } catch (error: any) {
       console.error('Erro ao buscar candidatos:', error);
-      throw new Error(error.response?.data?.error || 'Erro na busca');
+      const errorMessage = error.response?.data?.error || error.message || 'Erro na busca';
+      throw new Error(errorMessage);
+    }
+  },
+
+  // Obter estatísticas dos candidatos
+  getStats: async (): Promise<any> => {
+    try {
+      const candidates = await candidatesApi.getAll();
+      
+      const stats = {
+        total: candidates.length,
+        by_status: candidates.reduce((acc: Record<string, number>, candidate) => {
+          acc[candidate.status] = (acc[candidate.status] || 0) + 1;
+          return acc;
+        }, {}),
+        recent: candidates
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 5),
+      };
+      
+      return stats;
+    } catch (error: any) {
+      console.error('Erro ao obter estatísticas:', error);
+      throw new Error('Erro ao carregar estatísticas');
     }
   }
 };
