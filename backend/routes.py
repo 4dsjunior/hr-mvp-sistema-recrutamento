@@ -661,22 +661,108 @@ def get_dashboard_metrics():
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
-# JOBS ENDPOINTS (PLACEHOLDER)
+# JOBS ENDPOINTS
 # =============================================================================
 
 @api.route('/jobs', methods=['GET'])
 def get_jobs():
-    """Listar todas as vagas (placeholder)"""
+    """Listar todas as vagas"""
     try:
-        # Por enquanto retornar lista vazia até criar tabela jobs
-        return jsonify([])
+        response = supabase.table('jobs').select('*').order('created_at', desc=True).execute()
+        return jsonify(response.data)
     except Exception as e:
-        print(f"❌ Erro ao buscar vagas: {e}")
+        print(f"Erro ao buscar vagas: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/jobs', methods=['POST'])
+def create_job():
+    """Criar nova vaga"""
+    try:
+        data = request.json
+        response = supabase.table('jobs').insert(data).execute()
+        return jsonify(response.data), 201
+    except Exception as e:
+        print(f"Erro ao criar vaga: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/jobs/<int:job_id>', methods=['PUT'])
+def update_job(job_id):
+    """Atualizar vaga existente"""
+    try:
+        data = request.json
+        data['updated_at'] = 'now()'
+        response = supabase.table('jobs').update(data).eq('id', job_id).execute()
+        return jsonify(response.data)
+    except Exception as e:
+        print(f"Erro ao atualizar vaga {job_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/jobs/<int:job_id>', methods=['DELETE'])
+def delete_job(job_id):
+    """Deletar vaga"""
+    try:
+        response = supabase.table('jobs').delete().eq('id', job_id).execute()
+        return '', 204
+    except Exception as e:
+        print(f"Erro ao deletar vaga {job_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# APPLICATIONS ENDPOINTS
+# =============================================================================
+
+@api.route('/applications', methods=['POST'])
+def create_application():
+    """Criar nova candidatura"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        data = request.json
+        # Verificar se candidato já se candidatou para esta vaga
+        existing = supabase.table('applications').select('*').eq('candidate_id', data['candidate_id']).eq('job_id', data['job_id']).execute()
+        if existing.data:
+            return jsonify({'error': 'Candidato já se candidatou para esta vaga'}), 400
+        response = supabase.table('applications').insert(data).execute()
+        return jsonify(response.data), 201
+    except Exception as e:
+        print(f"Erro ao criar candidatura: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/applications/job/<int:job_id>', methods=['GET'])
+def get_applications_by_job(job_id):
+    """Buscar candidaturas por vaga"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        response = supabase.table('applications') \
+            .select('*, candidates(*), jobs(*)') \
+            .eq('job_id', job_id) \
+            .execute()
+        return jsonify(response.data)
+    except Exception as e:
+        print(f"Erro ao buscar candidaturas para vaga {job_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/applications/<int:app_id>/stage', methods=['PUT'])
+def update_application_stage(app_id):
+    """Atualizar etapa da candidatura"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        data = request.json
+        response = supabase.table('applications').update({
+            'current_stage': data['stage'],
+            'status': data.get('status', 'in_progress')
+        }).eq('id', app_id).execute()
+        return jsonify(response.data)
+    except Exception as e:
+        print(f"Erro ao atualizar etapa da candidatura {app_id}: {e}")
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
 # DEBUG ENDPOINTS
 # =============================================================================
+
 
 @api.route('/debug/insert', methods=['POST'])
 def debug_insert():

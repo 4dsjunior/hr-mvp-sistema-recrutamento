@@ -299,3 +299,95 @@ Esse README documenta perfeitamente:
 - ✅ **Conquistas importantes**
 
 **Agora vocês têm um projeto profissional documentado! 🏆**
+
+
+------------------------------------------------------------
+
+
+ Current Status: Backend for Applications is complete.
+
+  ---
+
+  Roadmap Detalhado MVP Sistema de Recrutamento e Seleção - Checklist Atualizado
+
+
+  SEMANA 1-2: Configuração e Setup
+   * ✅ Dia 1 (11/07): Ambiente de Desenvolvimento
+   * ✅ Dia 2 (12/07): Configuração Supabase
+   * ✅ Dia 3 (13/07): Backend Flask Setup
+   * ✅ Dia 4 (14/07): Frontend com Bolt.new
+   * ✅ Dia 5 (15/07): Integração e Testes
+
+
+  SEMANA 3-4: CRUD de Candidatos
+   * ✅ Dia 8 (18/07): CRUD Backend Completo
+   * ✅ Dia 9 (19/07): Frontend CRUD
+   * ✅ Dia 10-11 (20-21/07): Refinamentos
+
+
+  SEMANA 5-6: CRUD de Vagas
+   * ✅ Dia 12 (22/07): Backend de Vagas
+   * ⏳ Dia 13-14 (23-24/07): Frontend de Vagas (Next up!)
+
+
+  SEMANA 7-8: Sistema de Candidaturas
+   * ✅ Dia 15-16 (25-26/07): Backend de Applications
+   * ⏳ Dia 17-18 (27-28/07): Pipeline de Candidatos
+
+
+  SEMANA 9-10: Dashboard e Relatórios
+   * ⏳ Dia 19-20 (29-30/07): Dashboard com Métricas (Backend & Frontend)
+
+
+  SEMANA 11-12: Autenticação e Permissões
+   * ⏳ Dia 21-22 (31/07 - 01/08): Sistema de Login (Frontend)
+   * ⏳ Dia 23-24 (02-03/08): Controle de Acesso (Backend)
+
+  SEMANA 13-14: Testes e Refinamentos
+   * ⏳ Checklist Completo de Testes
+
+  SEMANA 15-16: Deploy e Documentação
+   * ⏳ Dia 25-26 (04-05/08): Preparação para Deploy (Backend & Frontend)
+   * ⏳ Deploy no VPS
+
+  ---
+
+
+  Next Step: Implement the frontend for job management as outlined in Dia 13-14: 
+  Frontend de Vagas.Okay, let's move on to Dia 13-14: Frontend de Vagas.
+
+
+  This step involves generating the frontend code for managing job vacancies
+  using Bolt.new. Since I cannot directly interact with Bolt.new, please use the
+  following prompt to generate the code:
+
+
+
+    1 Adicione gerenciamento de vagas ao sistema:
+    2 PÁGINA DE VAGAS:
+    3 - Lista em cards responsivos (3 colunas desktop, 1 mobile)
+    4 - Cada card: Título, Empresa, Localização, Tipo (CLT/PJ), Salário, 
+      Status, Data
+    5 - Botões por card: Ver Detalhes, Editar, Excluir
+    6 - Filtros: Status, Tipo de Emprego, Faixa Salarial
+    7 - Busca por título ou descrição
+    8 FORMULÁRIO DE VAGA:
+    9 - Campos: Título*, Descrição*, Requisitos, Departamento, Localização
+      *, Tipo de Emprego, Salário Min/Max, Status
+   10 - Editor de texto rico para descrição (usar textarea por enquanto)
+   11 - Validação: campos obrigatórios, salário min < max
+   12 - Preview da vaga antes de salvar
+   13 DETALHES DA VAGA:
+   14 - Modal ou página com informações completas
+   15 - Lista de candidatos aplicados (placeholder)
+   16 - Botões: Editar Vaga, Ver Candidatos, Fechar
+   17 DESIGN:
+   18 - Cards com sombra e hover effect
+   19 - Status com badges coloridos (Ativa=verde, Pausada=amarelo,
+      Fechada=vermelho)
+   20 - Layout tipo job board moderno
+
+
+
+  Once you have generated the code, please provide it to me, and I will guide you
+   on how to integrate it into your frontend project.
