@@ -11,9 +11,9 @@ try:
         os.getenv('SUPABASE_URL'), 
         os.getenv('SUPABASE_KEY')
     )
-    print("✅ Supabase conectado com sucesso")
+    print("Supabase conectado com sucesso")
 except Exception as e:
-    print(f"❌ Erro ao conectar Supabase: {e}")
+    print(f"Erro ao conectar Supabase: {e}")
     supabase = None
 
 @api.route('/test', methods=['GET'])
@@ -357,7 +357,7 @@ def update_candidate(candidate_id):
         update_success = False
         try:
             print("🔄 TENTATIVA 1: UPDATE direto...")
-            response = supabase.table('candidates').update(update_data).eq('id', candidate_id).execute()
+            response = supabase.table('candidates').update(update_data).eq(column='id', value=candidate_id).execute()
             print(f"   Response type: {type(response)}")
             print(f"   Response data: {response.data if hasattr(response, 'data') else 'No data attr'}")
             
@@ -389,8 +389,8 @@ def update_candidate(candidate_id):
                 print(f"   📤 Dados para re-inserção: {new_candidate_data}")
                 
                 # Deletar registro antigo
-                print("   🗑️ Deletando registro antigo...")
-                delete_response = supabase.table('candidates').delete().eq('id', candidate_id).execute()
+                print("   Deletando registro antigo...")
+                delete_response = supabase.table('candidates').delete().eq(column='id', value=candidate_id).execute()
                 print(f"   Delete response: {delete_response.data if hasattr(delete_response, 'data') else 'No data'}")
                 
                 # Aguardar um pouco
@@ -478,7 +478,7 @@ def delete_candidate(candidate_id):
         delete_success = False
         try:
             print("🔄 TENTATIVA 1: DELETE direto...")
-            response = supabase.table('candidates').delete().eq('id', candidate_id).execute()
+            response = supabase.table('candidates').delete().eq(column='id', value=candidate_id).execute()
             print(f"   Response type: {type(response)}")
             print(f"   Response data: {response.data if hasattr(response, 'data') else 'No data attr'}")
             delete_success = True
@@ -496,7 +496,7 @@ def delete_candidate(candidate_id):
                     'deleted_at': datetime.now().isoformat()
                 }
                 
-                response = supabase.table('candidates').update(mark_deleted_data).eq('id', candidate_id).execute()
+                response = supabase.table('candidates').update(mark_deleted_data).eq(column='id', value=candidate_id).execute()
                 print(f"   Marcado como deletado: {response.data if hasattr(response, 'data') else 'No data'}")
                 delete_success = True
                 print("✅ Candidato marcado como deletado")
@@ -763,4 +763,4 @@ def health_check():
             'timestamp': datetime.now().isoformat()
         }), 500
 
-print("✅ Endpoints carregados com sucesso! [ESTRATÉGIA ROBUSTA COMPLETA + UPDATE/DELETE RIGOROSOS]")
+print("Endpoints carregados com sucesso! [ESTRATÉGIA ROBUSTA COMPLETA + UPDATE/DELETE RIGOROSOS]")

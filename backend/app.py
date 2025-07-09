@@ -55,11 +55,11 @@ if __name__ == '__main__':
     host = os.getenv('FLASK_HOST', '127.0.0.1')
     debug = os.getenv('DEBUG', 'True').lower() == 'true'
     
-    print("🚀 INICIANDO SISTEMA HR - MVP")
+    print("INICIANDO SISTEMA HR - MVP")
     print("============================")
-    print(f"🌐 URL: http://{host}:{port}")
-    print(f"🔧 Debug: {debug}")
-    print(f"📡 API: http://{host}:{port}/api")
+    print(f"URL: http://{host}:{port}")
+    print(f"Debug: {debug}")
+    print(f"API: http://{host}:{port}/api")
     print("============================")
     
     app.run(host=host, port=port, debug=debug)
