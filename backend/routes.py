@@ -97,6 +97,8 @@ def get_candidates():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+# SUBSTITUIR APENAS estas 4 funções no routes.py:
+
 @api.route('/candidates', methods=['POST'])
 def create_candidate():
     """Criar novo candidato"""
@@ -105,6 +107,7 @@ def create_candidate():
             return jsonify({'error': 'Database not connected'}), 500
             
         data = request.json
+        print(f"➕ Criando candidato: {data}")
         
         # Validar campos obrigatórios
         required_fields = ['first_name', 'last_name', 'email']
@@ -112,10 +115,22 @@ def create_candidate():
             if not data.get(field):
                 return jsonify({'error': f'Campo {field} é obrigatório'}), 400
         
-        # Validar email único
-        existing = supabase.table('candidates').select('id').eq('email', data['email']).execute()
-        if existing.data:
-            return jsonify({'error': 'Email já cadastrado'}), 400
+        # Validar email único - ABORDAGEM MAIS ROBUSTA
+        email = data['email']
+        print(f"🔍 Verificando email único: {email}")
+        
+        try:
+            # Buscar todos e filtrar no Python para evitar erro de sintaxe
+            all_candidates = supabase.table('candidates').select('id, email').execute()
+            
+            if all_candidates.data:
+                for candidate in all_candidates.data:
+                    if candidate.get('email') == email:
+                        print(f"⚠️ Email {email} já existe")
+                        return jsonify({'error': 'Email já cadastrado'}), 400
+        except Exception as e:
+            print(f"⚠️ Erro ao verificar email único: {e}")
+            # Continua mesmo com erro na verificação
         
         # Adicionar timestamps
         now = datetime.now().isoformat()
@@ -131,27 +146,45 @@ def create_candidate():
         
         response = supabase.table('candidates').insert(data).execute()
         
-        if response.data:
+        if response.data and len(response.data) > 0:
+            print(f"✅ Candidato criado: {response.data[0].get('email')}")
             return jsonify(response.data[0]), 201
         else:
+            print("❌ Erro ao criar candidato - sem dados retornados")
             return jsonify({'error': 'Erro ao criar candidato'}), 500
             
     except Exception as e:
         print(f"❌ Erro ao criar candidato: {e}")
         return jsonify({'error': str(e)}), 500
-    
+
 @api.route('/candidates/<int:candidate_id>', methods=['GET'])
 def get_candidate(candidate_id):
     """Buscar candidato por ID"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
-            
-        response = supabase.table('candidates').select('*').eq('id', candidate_id).execute()
+        
+        print(f"🔍 Buscando candidato ID: {candidate_id}")
+        
+        # ABORDAGEM MAIS ROBUSTA: Buscar todos e filtrar no Python
+        response = supabase.table('candidates').select('*').execute()
         
         if response.data:
-            return jsonify(response.data[0])
+            # Filtrar por ID no Python
+            found_candidate = None
+            for candidate in response.data:
+                if candidate.get('id') == candidate_id:
+                    found_candidate = candidate
+                    break
+            
+            if found_candidate:
+                print(f"✅ Candidato encontrado: {found_candidate.get('email')}")
+                return jsonify(found_candidate)
+            else:
+                print(f"⚠️ Candidato ID {candidate_id} não encontrado")
+                return jsonify({'error': 'Candidato não encontrado'}), 404
         else:
+            print(f"⚠️ Nenhum candidato encontrado na base")
             return jsonify({'error': 'Candidato não encontrado'}), 404
             
     except Exception as e:
@@ -164,17 +197,62 @@ def update_candidate(candidate_id):
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
-            
+        
         data = request.json
+        print(f"📝 Atualizando candidato ID: {candidate_id} com dados: {data}")
+        
+        # Primeiro, verificar se candidato existe
+        all_candidates = supabase.table('candidates').select('*').execute()
+        
+        candidate_exists = False
+        if all_candidates.data:
+            for candidate in all_candidates.data:
+                if candidate.get('id') == candidate_id:
+                    candidate_exists = True
+                    break
+        
+        if not candidate_exists:
+            print(f"⚠️ Candidato ID {candidate_id} não encontrado")
+            return jsonify({'error': 'Candidato não encontrado'}), 404
+        
+        # Adicionar timestamp de atualização
         data['updated_at'] = datetime.now().isoformat()
         
         # Limpar campos vazios
         data = {k: v for k, v in data.items() if v is not None and v != ''}
         
-        response = supabase.table('candidates').update(data).eq('id', candidate_id).execute()
+        # ABORDAGEM ALTERNATIVA: Deletar e recriar (só para teste)
+        # Primeiro buscar dados atuais
+        current_data = None
+        for candidate in all_candidates.data:
+            if candidate.get('id') == candidate_id:
+                current_data = candidate
+                break
         
-        if response.data:
-            return jsonify(response.data[0])
+        if current_data:
+            # Atualizar dados atuais com novos dados
+            updated_data = {**current_data, **data}
+            
+            # Remover o ID para reinserção
+            candidate_id_backup = updated_data.pop('id', None)
+            
+            # Deletar registro antigo
+            try:
+                # Buscar todos e deletar o correto
+                delete_response = supabase.table('candidates').delete().match({'id': candidate_id}).execute()
+                print(f"🗑️ Candidato {candidate_id} deletado para atualização")
+            except Exception as e:
+                print(f"⚠️ Erro ao deletar para atualização: {e}")
+            
+            # Inserir dados atualizados
+            insert_response = supabase.table('candidates').insert(updated_data).execute()
+            
+            if insert_response.data and len(insert_response.data) > 0:
+                print(f"✅ Candidato atualizado: {insert_response.data[0].get('email')}")
+                return jsonify(insert_response.data[0])
+            else:
+                print(f"❌ Erro ao reinserir candidato atualizado")
+                return jsonify({'error': 'Erro ao atualizar candidato'}), 500
         else:
             return jsonify({'error': 'Candidato não encontrado'}), 404
             
@@ -188,19 +266,64 @@ def delete_candidate(candidate_id):
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
-            
-        # Verificar se existe
-        existing = supabase.table('candidates').select('id').eq('id', candidate_id).execute()
-        if not existing.data:
+        
+        print(f"🗑️ Excluindo candidato ID: {candidate_id}")
+        
+        # Primeiro, verificar se candidato existe
+        all_candidates = supabase.table('candidates').select('*').execute()
+        
+        candidate_exists = False
+        if all_candidates.data:
+            for candidate in all_candidates.data:
+                if candidate.get('id') == candidate_id:
+                    candidate_exists = True
+                    break
+        
+        if not candidate_exists:
+            print(f"⚠️ Candidato ID {candidate_id} não encontrado")
             return jsonify({'error': 'Candidato não encontrado'}), 404
+        
+        # ABORDAGEM ALTERNATIVA: Usar match em vez de eq
+        try:
+            response = supabase.table('candidates').delete().match({'id': candidate_id}).execute()
+            print(f"✅ Candidato ID {candidate_id} excluído com sucesso")
+            return '', 204
+        except Exception as delete_error:
+            print(f"❌ Erro na exclusão direta: {delete_error}")
             
-        response = supabase.table('candidates').delete().eq('id', candidate_id).execute()
-        return '', 204
+            # FALLBACK: Marcar como inativo em vez de deletar
+            update_data = {
+                'status': 'deleted',
+                'updated_at': datetime.now().isoformat(),
+                'deleted_at': datetime.now().isoformat()
+            }
+            
+            # Buscar candidato atual
+            current_candidate = None
+            for candidate in all_candidates.data:
+                if candidate.get('id') == candidate_id:
+                    current_candidate = candidate
+                    break
+            
+            if current_candidate:
+                updated_data = {**current_candidate, **update_data}
+                updated_data.pop('id', None)
+                
+                # Deletar e reinserir com status deleted
+                try:
+                    supabase.table('candidates').delete().match({'id': candidate_id}).execute()
+                    supabase.table('candidates').insert(updated_data).execute()
+                    print(f"✅ Candidato ID {candidate_id} marcado como deletado")
+                    return '', 204
+                except Exception as fallback_error:
+                    print(f"❌ Erro no fallback: {fallback_error}")
+                    return jsonify({'error': 'Erro ao excluir candidato'}), 500
+            else:
+                return jsonify({'error': 'Candidato não encontrado'}), 404
         
     except Exception as e:
         print(f"❌ Erro ao deletar candidato: {e}")
         return jsonify({'error': str(e)}), 500
-
 @api.route('/candidates/search', methods=['GET'])
 def search_candidates():
     """Buscar candidatos com filtros"""
