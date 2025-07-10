@@ -1,7 +1,12 @@
+# 🚨 CORREÇÃO COMPLETA: routes.py sem duplicatas
+# Arquivo: backend/routes.py (substituir todo o conteúdo)
+
 from flask import Blueprint, request, jsonify
-from supabase import create_client
+from supabase import create_client, Client
 import os
 from datetime import datetime
+from decimal import Decimal
+import json
 
 api = Blueprint('api', __name__)
 
@@ -80,16 +85,11 @@ def robust_find_candidate_by_email(email):
         return None
 
 def robust_execute_operation(operation_name, operation_func, search_func, *args, **kwargs):
-    """
-    Executar operação de forma robusta:
-    1. Executar operação (ignorar erros)
-    2. Buscar resultado
-    3. Confirmar sucesso
-    """
+    """Executar operação de forma robusta"""
     try:
         print(f"🔄 Executando {operation_name}...")
         
-        # Executar operação (pode dar erro de resposta vazia)
+        # Executar operação (ignorar erros)
         try:
             result = operation_func(*args, **kwargs)
             print(f"✅ {operation_name} executado (resposta pode estar vazia)")
@@ -284,7 +284,7 @@ def create_candidate():
 
 @api.route('/candidates/<int:candidate_id>', methods=['GET'])
 def get_candidate_by_id(candidate_id):
-    """Buscar candidato específico por ID - ESTRATÉGIA ROBUSTA"""
+    """Buscar candidato específico por ID"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
@@ -309,7 +309,7 @@ def get_candidate_by_id(candidate_id):
 
 @api.route('/candidates/<int:candidate_id>', methods=['PUT'])
 def update_candidate(candidate_id):
-    """Atualizar candidato - VERIFICAÇÃO RIGOROSA"""
+    """Atualizar candidato"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
@@ -328,7 +328,6 @@ def update_candidate(candidate_id):
             return jsonify({'error': 'Candidato não encontrado'}), 404
         
         print(f"✅ Candidato atual encontrado: {current_candidate.get('email')}")
-        print(f"   Dados atuais: first_name='{current_candidate.get('first_name')}', last_name='{current_candidate.get('last_name')}', status='{current_candidate.get('status')}'")
         
         # Verificar email único (se email sendo alterado)
         if 'email' in data and data['email'] != current_candidate.get('email'):
@@ -346,102 +345,32 @@ def update_candidate(candidate_id):
         for field in allowed_fields:
             if field in data:
                 update_data[field] = data[field]
-                print(f"   📝 {field}: '{current_candidate.get(field)}' → '{data[field]}'")
         
         if not update_data:
             return jsonify({'error': 'Nenhum campo válido para atualizar'}), 400
         
         print(f"📤 EXECUTANDO UPDATE com dados: {update_data}")
         
-        # ESTRATÉGIA 1: Tentar UPDATE normal
-        update_success = False
+        # Executar UPDATE
         try:
-            print("🔄 TENTATIVA 1: UPDATE direto...")
-            response = supabase.table('candidates').update(update_data).eq(column='id', value=candidate_id).execute()
-            print(f"   Response type: {type(response)}")
-            print(f"   Response data: {response.data if hasattr(response, 'data') else 'No data attr'}")
-            
-            if hasattr(response, 'data') and response.data:
-                print("✅ UPDATE direto aparentemente funcionou")
-                update_success = True
-            else:
-                print("⚠️ UPDATE direto retornou resposta vazia")
+            response = supabase.table('candidates').update(update_data).eq('id', candidate_id).execute()
+            print(f"✅ UPDATE executado")
         except Exception as update_error:
-            print(f"❌ UPDATE direto falhou: {update_error}")
+            print(f"❌ UPDATE falhou: {update_error}")
+            return jsonify({'error': 'Erro ao atualizar candidato'}), 500
         
-        # ESTRATÉGIA 2: Se UPDATE falhou, tentar DELETE + INSERT
-        if not update_success:
-            print("🔄 TENTATIVA 2: DELETE + INSERT...")
-            try:
-                # Combinar dados atuais com novos
-                new_candidate_data = {**current_candidate}
-                for field, value in update_data.items():
-                    new_candidate_data[field] = value
-                
-                # Remover campos que podem causar conflito
-                if 'id' in new_candidate_data:
-                    del new_candidate_data['id']
-                if 'created_at' in new_candidate_data:
-                    del new_candidate_data['created_at']
-                
-                new_candidate_data['updated_at'] = datetime.now().isoformat()
-                
-                print(f"   📤 Dados para re-inserção: {new_candidate_data}")
-                
-                # Deletar registro antigo
-                print("   Deletando registro antigo...")
-                delete_response = supabase.table('candidates').delete().eq(column='id', value=candidate_id).execute()
-                print(f"   Delete response: {delete_response.data if hasattr(delete_response, 'data') else 'No data'}")
-                
-                # Aguardar um pouco
-                import time
-                time.sleep(0.3)
-                
-                # Inserir registro atualizado
-                print("   ➕ Inserindo registro atualizado...")
-                insert_response = supabase.table('candidates').insert(new_candidate_data).execute()
-                print(f"   Insert response: {insert_response.data if hasattr(insert_response, 'data') else 'No data'}")
-                
-                update_success = True
-                print("✅ DELETE + INSERT completado")
-                
-            except Exception as recreate_error:
-                print(f"❌ DELETE + INSERT falhou: {recreate_error}")
-        
-        # VERIFICAÇÃO RIGOROSA: Buscar candidato após operação
-        print("🔍 VERIFICANDO se UPDATE realmente funcionou...")
+        # Verificar se update funcionou
         import time
-        time.sleep(0.5)  # Aguardar mais tempo para consistência
+        time.sleep(0.5)
         
         updated_candidate = robust_find_candidate_by_id(candidate_id)
         
         if updated_candidate:
-            print(f"✅ Candidato {candidate_id} ainda existe após update")
-            
-            # Verificar se PELO MENOS UM campo foi realmente atualizado
-            fields_updated = []
-            fields_failed = []
-            
-            for field, expected_value in update_data.items():
-                actual_value = updated_candidate.get(field)
-                if actual_value == expected_value:
-                    fields_updated.append(field)
-                    print(f"   ✅ {field}: '{actual_value}' (atualizado)")
-                else:
-                    fields_failed.append(field)
-                    print(f"   ❌ {field}: '{actual_value}' (esperado: '{expected_value}')")
-            
-            if fields_updated:
-                print(f"✅ UPDATE CONFIRMADO! Campos atualizados: {fields_updated}")
-                if fields_failed:
-                    print(f"⚠️ Campos que falharam: {fields_failed}")
-                return jsonify(updated_candidate), 200
-            else:
-                print(f"❌ NENHUM CAMPO foi atualizado! Update falhou completamente.")
-                return jsonify({'error': 'Atualização falhou - nenhum campo foi modificado'}), 500
+            print(f"✅ Candidato {candidate_id} atualizado com sucesso")
+            return jsonify(updated_candidate), 200
         else:
-            print(f"❌ Candidato {candidate_id} DESAPARECEU após update!")
-            return jsonify({'error': 'Candidato foi perdido durante atualização'}), 500
+            print(f"❌ Candidato {candidate_id} não encontrado após update!")
+            return jsonify({'error': 'Erro inesperado na atualização'}), 500
         
     except Exception as e:
         print(f"❌ Erro geral na atualização: {e}")
@@ -451,7 +380,7 @@ def update_candidate(candidate_id):
 
 @api.route('/candidates/<int:candidate_id>', methods=['DELETE'])
 def delete_candidate(candidate_id):
-    """Deletar candidato - VERIFICAÇÃO RIGOROSA"""
+    """Deletar candidato"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
@@ -465,82 +394,28 @@ def delete_candidate(candidate_id):
             return jsonify({'error': 'Candidato não encontrado'}), 404
         
         candidate_name = f"{current_candidate.get('first_name', '')} {current_candidate.get('last_name', '')}".strip()
-        candidate_email = current_candidate.get('email', '')
+        print(f"✅ Candidato {candidate_id} encontrado: {candidate_name}")
         
-        print(f"✅ Candidato {candidate_id} encontrado: {candidate_name} ({candidate_email})")
-        
-        # Contar candidatos ANTES da exclusão
-        all_candidates_before = robust_search_all_candidates()
-        count_before = len(all_candidates_before)
-        print(f"📊 Total de candidatos ANTES da exclusão: {count_before}")
-        
-        # ESTRATÉGIA 1: DELETE direto
-        delete_success = False
+        # Executar DELETE
         try:
-            print("🔄 TENTATIVA 1: DELETE direto...")
-            response = supabase.table('candidates').delete().eq(column='id', value=candidate_id).execute()
-            print(f"   Response type: {type(response)}")
-            print(f"   Response data: {response.data if hasattr(response, 'data') else 'No data attr'}")
-            delete_success = True
-            print("✅ DELETE direto executado")
+            response = supabase.table('candidates').delete().eq('id', candidate_id).execute()
+            print(f"✅ DELETE executado")
         except Exception as delete_error:
-            print(f"❌ DELETE direto falhou: {delete_error}")
+            print(f"❌ DELETE falhou: {delete_error}")
+            return jsonify({'error': 'Erro ao deletar candidato'}), 500
         
-        # ESTRATÉGIA 2: Se DELETE falhou, tentar marcar como deletado
-        if not delete_success:
-            print("🔄 TENTATIVA 2: Marcar como deletado...")
-            try:
-                mark_deleted_data = {
-                    'status': 'deleted',
-                    'updated_at': datetime.now().isoformat(),
-                    'deleted_at': datetime.now().isoformat()
-                }
-                
-                response = supabase.table('candidates').update(mark_deleted_data).eq(column='id', value=candidate_id).execute()
-                print(f"   Marcado como deletado: {response.data if hasattr(response, 'data') else 'No data'}")
-                delete_success = True
-                print("✅ Candidato marcado como deletado")
-            except Exception as mark_error:
-                print(f"❌ Marcar como deletado falhou: {mark_error}")
-        
-        # VERIFICAÇÃO RIGOROSA: Confirmar exclusão
-        print("🔍 VERIFICANDO se DELETE realmente funcionou...")
+        # Verificar se delete funcionou
         import time
-        time.sleep(0.5)  # Aguardar para consistência
+        time.sleep(0.5)
         
-        # Buscar candidato após exclusão
         deleted_candidate = robust_find_candidate_by_id(candidate_id)
         
-        # Contar candidatos APÓS a exclusão
-        all_candidates_after = robust_search_all_candidates()
-        count_after = len(all_candidates_after)
-        print(f"📊 Total de candidatos APÓS a exclusão: {count_after}")
-        
         if deleted_candidate is None:
-            # Candidato realmente foi deletado
-            print(f"✅ DELETE CONFIRMADO! Candidato {candidate_id} não existe mais")
-            print(f"📊 Contagem: {count_before} → {count_after} (-{count_before - count_after})")
-            
-            if count_after < count_before:
-                print("✅ Contagem de candidatos diminuiu - DELETE bem-sucedido!")
-            else:
-                print("⚠️ Contagem não diminuiu, mas candidato não foi encontrado")
-            
+            print(f"✅ DELETE CONFIRMADO! Candidato {candidate_id} foi removido")
             return '', 204
-            
-        elif deleted_candidate.get('status') == 'deleted':
-            # Candidato foi marcado como deletado
-            print(f"✅ DELETE SIMULADO! Candidato {candidate_id} marcado como deletado")
-            return '', 204
-            
         else:
-            # Candidato ainda existe e não foi marcado como deletado
-            print(f"❌ DELETE FALHOU! Candidato {candidate_id} ainda existe:")
-            print(f"   Status: {deleted_candidate.get('status')}")
-            print(f"   Email: {deleted_candidate.get('email')}")
-            print(f"📊 Contagem: {count_before} → {count_after} (sem mudança)")
-            
-            return jsonify({'error': 'Falha ao deletar candidato - ainda existe no banco'}), 500
+            print(f"❌ DELETE FALHOU! Candidato {candidate_id} ainda existe")
+            return jsonify({'error': 'Falha ao deletar candidato'}), 500
         
     except Exception as e:
         print(f"❌ Erro geral na exclusão: {e}")
@@ -550,7 +425,7 @@ def delete_candidate(candidate_id):
 
 @api.route('/candidates/search', methods=['GET'])
 def search_candidates():
-    """Buscar candidatos com filtros avançados - ESTRATÉGIA ROBUSTA"""
+    """Buscar candidatos com filtros avançados"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
@@ -606,7 +481,7 @@ def search_candidates():
 
 @api.route('/dashboard/metrics', methods=['GET'])
 def get_dashboard_metrics():
-    """Obter métricas para o dashboard - ESTRATÉGIA ROBUSTA"""
+    """Obter métricas para o dashboard"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
@@ -666,156 +541,848 @@ def get_dashboard_metrics():
 
 @api.route('/jobs', methods=['GET'])
 def get_jobs():
-    """Listar todas as vagas"""
+    """Listar todas as vagas com filtros opcionais"""
     try:
-        response = supabase.table('jobs').select('*').order('created_at', desc=True).execute()
-        return jsonify(response.data)
+        # Parâmetros de query
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        search = request.args.get('search', '')
+        status = request.args.get('status', '')
+        employment_type = request.args.get('employment_type', '')
+        experience_level = request.args.get('experience_level', '')
+        company = request.args.get('company', '')
+        
+        # Construir query
+        query = supabase.table('jobs').select('*')
+        
+        # Filtros
+        if search:
+            query = query.or_(f'title.ilike.%{search}%,description.ilike.%{search}%,company.ilike.%{search}%')
+        
+        if status:
+            query = query.eq('status', status)
+        
+        if employment_type:
+            query = query.eq('employment_type', employment_type)
+            
+        if experience_level:
+            query = query.eq('experience_level', experience_level)
+            
+        if company:
+            query = query.ilike('company', f'%{company}%')
+        
+        # Ordenação
+        query = query.order('created_at', desc=True)
+        
+        # Executar query
+        response = query.execute()
+        jobs = response.data
+        
+        # Paginação manual
+        total = len(jobs)
+        start = (page - 1) * per_page
+        end = start + per_page
+        paginated_jobs = jobs[start:end]
+        
+        # Formatar salários e datas
+        for job in paginated_jobs:
+            if job.get('salary_min'):
+                job['salary_min'] = float(job['salary_min'])
+            if job.get('salary_max'):
+                job['salary_max'] = float(job['salary_max'])
+            if job.get('application_deadline'):
+                job['application_deadline'] = job['application_deadline']
+        
+        return jsonify({
+            'jobs': paginated_jobs,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': (total + per_page - 1) // per_page
+        })
+        
     except Exception as e:
-        print(f"Erro ao buscar vagas: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/jobs/<int:job_id>', methods=['GET'])
+def get_job(job_id):
+    """Obter vaga específica por ID"""
+    try:
+        response = supabase.table('jobs').select('*').eq('id', job_id).execute()
+        
+        if not response.data:
+            return jsonify({'error': 'Vaga não encontrada'}), 404
+            
+        job = response.data[0]
+        
+        # Formatar dados
+        if job.get('salary_min'):
+            job['salary_min'] = float(job['salary_min'])
+        if job.get('salary_max'):
+            job['salary_max'] = float(job['salary_max'])
+            
+        return jsonify(job)
+        
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @api.route('/jobs', methods=['POST'])
 def create_job():
     """Criar nova vaga"""
     try:
-        data = request.json
-        response = supabase.table('jobs').insert(data).execute()
-        return jsonify(response.data), 201
+        data = request.get_json()
+        
+        # Validações obrigatórias
+        required_fields = ['title', 'company']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'error': f'Campo {field} é obrigatório'}), 400
+        
+        # Dados para inserção
+        job_data = {
+            'title': data.get('title'),
+            'description': data.get('description', ''),
+            'company': data.get('company'),
+            'location': data.get('location', ''),
+            'salary_min': data.get('salary_min'),
+            'salary_max': data.get('salary_max'),
+            'employment_type': data.get('employment_type', 'full-time'),
+            'experience_level': data.get('experience_level', 'mid-level'),
+            'status': data.get('status', 'active'),
+            'requirements': data.get('requirements', ''),
+            'benefits': data.get('benefits', ''),
+            'application_deadline': data.get('application_deadline')
+        }
+        
+        # Remover campos None
+        job_data = {k: v for k, v in job_data.items() if v is not None}
+        
+        response = supabase.table('jobs').insert(job_data).execute()
+        
+        if response.data:
+            return jsonify({
+                'message': 'Vaga criada com sucesso',
+                'job': response.data[0]
+            }), 201
+        else:
+            return jsonify({'error': 'Erro ao criar vaga'}), 500
+            
     except Exception as e:
-        print(f"Erro ao criar vaga: {e}")
         return jsonify({'error': str(e)}), 500
 
 @api.route('/jobs/<int:job_id>', methods=['PUT'])
 def update_job(job_id):
     """Atualizar vaga existente"""
     try:
-        data = request.json
-        data['updated_at'] = 'now()'
-        response = supabase.table('jobs').update(data).eq('id', job_id).execute()
-        return jsonify(response.data)
+        data = request.get_json()
+        
+        # Verificar se a vaga existe
+        existing = supabase.table('jobs').select('*').eq('id', job_id).execute()
+        if not existing.data:
+            return jsonify({'error': 'Vaga não encontrada'}), 404
+        
+        # Dados para atualização
+        job_data = {}
+        
+        # Campos opcionais para atualização
+        optional_fields = [
+            'title', 'description', 'company', 'location', 
+            'salary_min', 'salary_max', 'employment_type', 
+            'experience_level', 'status', 'requirements', 
+            'benefits', 'application_deadline'
+        ]
+        
+        for field in optional_fields:
+            if field in data:
+                job_data[field] = data[field]
+        
+        if not job_data:
+            return jsonify({'error': 'Nenhum dado fornecido para atualização'}), 400
+        
+        response = supabase.table('jobs').update(job_data).eq('id', job_id).execute()
+        
+        if response.data:
+            return jsonify({
+                'message': 'Vaga atualizada com sucesso',
+                'job': response.data[0]
+            })
+        else:
+            return jsonify({'error': 'Erro ao atualizar vaga'}), 500
+            
     except Exception as e:
-        print(f"Erro ao atualizar vaga {job_id}: {e}")
         return jsonify({'error': str(e)}), 500
 
 @api.route('/jobs/<int:job_id>', methods=['DELETE'])
 def delete_job(job_id):
     """Deletar vaga"""
     try:
+        # Verificar se a vaga existe
+        existing = supabase.table('jobs').select('*').eq('id', job_id).execute()
+        if not existing.data:
+            return jsonify({'error': 'Vaga não encontrada'}), 404
+        
         response = supabase.table('jobs').delete().eq('id', job_id).execute()
-        return '', 204
+        
+        return jsonify({'message': 'Vaga deletada com sucesso'})
+        
     except Exception as e:
-        print(f"Erro ao deletar vaga {job_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/jobs/stats', methods=['GET'])
+def get_jobs_stats():
+    """Estatísticas das vagas"""
+    try:
+        # Buscar todas as vagas
+        response = supabase.table('jobs').select('*').execute()
+        jobs = response.data
+        
+        # Calcular estatísticas
+        total_jobs = len(jobs)
+        active_jobs = len([job for job in jobs if job['status'] == 'active'])
+        paused_jobs = len([job for job in jobs if job['status'] == 'paused'])
+        closed_jobs = len([job for job in jobs if job['status'] == 'closed'])
+        
+        # Contagem por tipo de emprego
+        employment_types = {}
+        for job in jobs:
+            emp_type = job.get('employment_type', 'full-time')
+            employment_types[emp_type] = employment_types.get(emp_type, 0) + 1
+        
+        # Contagem por nível de experiência
+        experience_levels = {}
+        for job in jobs:
+            exp_level = job.get('experience_level', 'mid-level')
+            experience_levels[exp_level] = experience_levels.get(exp_level, 0) + 1
+        
+        # Empresas com mais vagas
+        companies = {}
+        for job in jobs:
+            company = job.get('company', 'N/A')
+            companies[company] = companies.get(company, 0) + 1
+        
+        # Top 5 empresas
+        top_companies = sorted(companies.items(), key=lambda x: x[1], reverse=True)[:5]
+        
+        return jsonify({
+            'total_jobs': total_jobs,
+            'active_jobs': active_jobs,
+            'paused_jobs': paused_jobs,
+            'closed_jobs': closed_jobs,
+            'employment_types': employment_types,
+            'experience_levels': experience_levels,
+            'top_companies': top_companies
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/jobs/search', methods=['GET'])
+def search_jobs():
+    """Busca avançada de vagas"""
+    try:
+        # Parâmetros de busca
+        query_text = request.args.get('q', '')
+        location = request.args.get('location', '')
+        salary_min = request.args.get('salary_min', type=float)
+        salary_max = request.args.get('salary_max', type=float)
+        employment_type = request.args.get('employment_type', '')
+        experience_level = request.args.get('experience_level', '')
+        
+        # Construir query base
+        query = supabase.table('jobs').select('*')
+        
+        # Filtros de busca
+        if query_text:
+            query = query.or_(f'title.ilike.%{query_text}%,description.ilike.%{query_text}%,requirements.ilike.%{query_text}%')
+        
+        if location:
+            query = query.ilike('location', f'%{location}%')
+        
+        if salary_min:
+            query = query.gte('salary_min', salary_min)
+        
+        if salary_max:
+            query = query.lte('salary_max', salary_max)
+            
+        if employment_type:
+            query = query.eq('employment_type', employment_type)
+            
+        if experience_level:
+            query = query.eq('experience_level', experience_level)
+        
+        # Apenas vagas ativas
+        query = query.eq('status', 'active')
+        
+        # Ordenação por data de criação
+        query = query.order('created_at', desc=True)
+        
+        response = query.execute()
+        jobs = response.data
+        
+        # Formatar dados
+        for job in jobs:
+            if job.get('salary_min'):
+                job['salary_min'] = float(job['salary_min'])
+            if job.get('salary_max'):
+                job['salary_max'] = float(job['salary_max'])
+        
+        return jsonify({
+            'jobs': jobs,
+            'total': len(jobs),
+            'search_params': {
+                'query': query_text,
+                'location': location,
+                'salary_min': salary_min,
+                'salary_max': salary_max,
+                'employment_type': employment_type,
+                'experience_level': experience_level
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/jobs/options', methods=['GET'])
+def get_job_options():
+    """Obter opções para filtros (employment_type, experience_level, status)"""
+    try:
+        employment_types = [
+            {'value': 'full-time', 'label': 'Tempo Integral'},
+            {'value': 'part-time', 'label': 'Meio Período'},
+            {'value': 'contract', 'label': 'Contrato'},
+            {'value': 'internship', 'label': 'Estágio'},
+            {'value': 'freelance', 'label': 'Freelance'}
+        ]
+        
+        experience_levels = [
+            {'value': 'entry-level', 'label': 'Iniciante'},
+            {'value': 'junior', 'label': 'Júnior'},
+            {'value': 'mid-level', 'label': 'Pleno'},
+            {'value': 'senior', 'label': 'Sênior'},
+            {'value': 'executive', 'label': 'Executivo'}
+        ]
+        
+        status_options = [
+            {'value': 'active', 'label': 'Ativa'},
+            {'value': 'paused', 'label': 'Pausada'},
+            {'value': 'closed', 'label': 'Fechada'}
+        ]
+        
+        return jsonify({
+            'employment_types': employment_types,
+            'experience_levels': experience_levels,
+            'status_options': status_options
+        })
+        
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
 # APPLICATIONS ENDPOINTS
 # =============================================================================
 
+@api.route('/applications', methods=['GET'])
+def get_applications():
+    """Listar todas as candidaturas com filtros"""
+    try:
+        # Parâmetros de query
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        status = request.args.get('status', '')
+        stage = request.args.get('stage', type=int)
+        job_id = request.args.get('job_id', type=int)
+        candidate_id = request.args.get('candidate_id', type=int)
+        
+        # Query base SEM JOIN complexo (problema do Supabase)
+        query = supabase.table('applications').select('*')
+        
+        # Aplicar filtros
+        if status:
+            query = query.eq('status', status)
+        
+        if stage:
+            query = query.eq('stage', stage)
+            
+        if job_id:
+            query = query.eq('job_id', job_id)
+            
+        if candidate_id:
+            query = query.eq('candidate_id', candidate_id)
+        
+        # Ordenação
+        query = query.order('applied_at', desc=True)
+        
+        # Executar query
+        response = query.execute()
+        applications = response.data
+        
+        # Buscar dados relacionados separadamente
+        for app in applications:
+            # Buscar candidato
+            if app.get('candidate_id'):
+                candidate_resp = supabase.table('candidates').select('id, first_name, last_name, email, phone, status').eq('id', app['candidate_id']).execute()
+                if candidate_resp.data:
+                    app['candidates'] = candidate_resp.data[0]
+            
+            # Buscar vaga
+            if app.get('job_id'):
+                job_resp = supabase.table('jobs').select('id, title, company, location, status').eq('id', app['job_id']).execute()
+                if job_resp.data:
+                    app['jobs'] = job_resp.data[0]
+            
+            # Buscar etapa
+            if app.get('stage'):
+                stage_resp = supabase.table('recruitment_stages').select('id, name, description, color').eq('id', app['stage']).execute()
+                if stage_resp.data:
+                    app['recruitment_stages'] = stage_resp.data[0]
+        
+        # Paginação manual
+        total = len(applications)
+        start = (page - 1) * per_page
+        end = start + per_page
+        paginated_applications = applications[start:end]
+        
+        return jsonify({
+            'applications': paginated_applications,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': (total + per_page - 1) // per_page
+        })
+        
+    except Exception as e:
+        print(f"Erro em get_applications: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/applications/<int:application_id>', methods=['GET'])
+def get_application(application_id):
+    """Obter candidatura específica com histórico"""
+    try:
+        # Buscar candidatura
+        app_response = supabase.table('applications').select('*').eq('id', application_id).execute()
+        
+        if not app_response.data:
+            return jsonify({'error': 'Candidatura não encontrada'}), 404
+            
+        application = app_response.data[0]
+        
+        # Buscar dados relacionados separadamente
+        # Candidato
+        if application.get('candidate_id'):
+            candidate_resp = supabase.table('candidates').select('*').eq('id', application['candidate_id']).execute()
+            if candidate_resp.data:
+                application['candidates'] = candidate_resp.data[0]
+        
+        # Vaga
+        if application.get('job_id'):
+            job_resp = supabase.table('jobs').select('*').eq('id', application['job_id']).execute()
+            if job_resp.data:
+                application['jobs'] = job_resp.data[0]
+        
+        # Etapa
+        if application.get('stage'):
+            stage_resp = supabase.table('recruitment_stages').select('*').eq('id', application['stage']).execute()
+            if stage_resp.data:
+                application['recruitment_stages'] = stage_resp.data[0]
+        
+        # Buscar histórico
+        history_response = supabase.table('application_history').select('*').eq('application_id', application_id).order('changed_at', desc=True).execute()
+        application['history'] = history_response.data
+        
+        # Buscar comentários
+        comments_response = supabase.table('application_comments').select('*').eq('application_id', application_id).order('created_at', desc=True).execute()
+        application['comments'] = comments_response.data
+        
+        return jsonify(application)
+        
+    except Exception as e:
+        print(f"Erro em get_application: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @api.route('/applications', methods=['POST'])
 def create_application():
     """Criar nova candidatura"""
     try:
-        if not supabase:
-            return jsonify({'error': 'Database not connected'}), 500
-        data = request.json
-        # Verificar se candidato já se candidatou para esta vaga
-        existing = supabase.table('applications').select('*').eq('candidate_id', data['candidate_id']).eq('job_id', data['job_id']).execute()
-        if existing.data:
+        data = request.get_json()
+        
+        # Validações obrigatórias
+        required_fields = ['candidate_id', 'job_id']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'error': f'Campo {field} é obrigatório'}), 400
+        
+        # Verificar se candidato existe
+        candidate_check = supabase.table('candidates').select('id').eq('id', data['candidate_id']).execute()
+        if not candidate_check.data:
+            return jsonify({'error': 'Candidato não encontrado'}), 404
+        
+        # Verificar se vaga existe e está ativa
+        job_check = supabase.table('jobs').select('id, status').eq('id', data['job_id']).execute()
+        if not job_check.data:
+            return jsonify({'error': 'Vaga não encontrada'}), 404
+        
+        if job_check.data[0]['status'] != 'active':
+            return jsonify({'error': 'Não é possível se candidatar a uma vaga inativa'}), 400
+        
+        # Verificar se candidatura já existe
+        existing_check = supabase.table('applications').select('id').eq('candidate_id', data['candidate_id']).eq('job_id', data['job_id']).execute()
+        if existing_check.data:
             return jsonify({'error': 'Candidato já se candidatou para esta vaga'}), 400
-        response = supabase.table('applications').insert(data).execute()
-        return jsonify(response.data), 201
-    except Exception as e:
-        print(f"Erro ao criar candidatura: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@api.route('/applications/job/<int:job_id>', methods=['GET'])
-def get_applications_by_job(job_id):
-    """Buscar candidaturas por vaga"""
-    try:
-        if not supabase:
-            return jsonify({'error': 'Database not connected'}), 500
-        response = supabase.table('applications') \
-            .select('*, candidates(*), jobs(*)') \
-            .eq('job_id', job_id) \
-            .execute()
-        return jsonify(response.data)
-    except Exception as e:
-        print(f"Erro ao buscar candidaturas para vaga {job_id}: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@api.route('/applications/<int:app_id>/stage', methods=['PUT'])
-def update_application_stage(app_id):
-    """Atualizar etapa da candidatura"""
-    try:
-        if not supabase:
-            return jsonify({'error': 'Database not connected'}), 500
-        data = request.json
-        response = supabase.table('applications').update({
-            'current_stage': data['stage'],
-            'status': data.get('status', 'in_progress')
-        }).eq('id', app_id).execute()
-        return jsonify(response.data)
-    except Exception as e:
-        print(f"Erro ao atualizar etapa da candidatura {app_id}: {e}")
-        return jsonify({'error': str(e)}), 500
-
-# =============================================================================
-# DEBUG ENDPOINTS
-# =============================================================================
-
-
-@api.route('/debug/insert', methods=['POST'])
-def debug_insert():
-    """Debug da inserção no Supabase - ESTRATÉGIA ROBUSTA"""
-    try:
-        if not supabase:
-            return jsonify({'error': 'Database not connected'}), 500
         
-        print("🔍 === DEBUG INSERÇÃO ===")
-        
-        # Verificar acesso à tabela
-        all_candidates = robust_search_all_candidates()
-        print(f"✅ Tabela candidates acessível: {len(all_candidates)} registros")
-        
-        # Dados mínimos para teste
-        minimal_data = {
-            'first_name': 'Debug',
-            'last_name': 'Test',
-            'email': f'debug_{datetime.now().timestamp()}@test.com',
-            'status': 'active'
+        # Dados para inserção
+        application_data = {
+            'candidate_id': data['candidate_id'],
+            'job_id': data['job_id'],
+            'status': data.get('status', 'applied'),
+            'stage': data.get('stage', 1),
+            'notes': data.get('notes', '')
         }
         
-        print(f"📤 Testando inserção: {minimal_data}")
+        response = supabase.table('applications').insert(application_data).execute()
         
-        # Usar estratégia robusta
-        def debug_insert_operation():
-            return supabase.table('candidates').insert(minimal_data).execute()
-        
-        def debug_search_created():
-            return robust_find_candidate_by_email(minimal_data['email'])
-        
-        result = robust_execute_operation(
-            "DEBUG_INSERT",
-            debug_insert_operation,
-            debug_search_created
-        )
-        
-        if result:
+        if response.data:
             return jsonify({
-                'status': 'success',
-                'message': 'DEBUG: Inserção funcionou com estratégia robusta!',
-                'data': result,
-                'strategy': 'robust_strategy'
+                'message': 'Candidatura criada com sucesso',
+                'application': response.data[0]
+            }), 201
+        else:
+            return jsonify({'error': 'Erro ao criar candidatura'}), 500
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/applications/<int:application_id>', methods=['PUT'])
+def update_application(application_id):
+    """Atualizar candidatura (status, etapa, notas)"""
+    try:
+        data = request.get_json()
+        
+        # Verificar se candidatura existe
+        existing = supabase.table('applications').select('*').eq('id', application_id).execute()
+        if not existing.data:
+            return jsonify({'error': 'Candidatura não encontrada'}), 404
+        
+        # Dados para atualização
+        update_data = {}
+        
+        # Campos permitidos para atualização
+        allowed_fields = ['status', 'stage', 'notes']
+        for field in allowed_fields:
+            if field in data:
+                update_data[field] = data[field]
+        
+        if not update_data:
+            return jsonify({'error': 'Nenhum dado fornecido para atualização'}), 400
+        
+        # Validar etapa
+        if 'stage' in update_data:
+            stage_check = supabase.table('recruitment_stages').select('id').eq('id', update_data['stage']).execute()
+            if not stage_check.data:
+                return jsonify({'error': 'Etapa inválida'}), 400
+        
+        response = supabase.table('applications').update(update_data).eq('id', application_id).execute()
+        
+        if response.data:
+            return jsonify({
+                'message': 'Candidatura atualizada com sucesso',
+                'application': response.data[0]
             })
+        else:
+            return jsonify({'error': 'Erro ao atualizar candidatura'}), 500
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/applications/<int:application_id>', methods=['DELETE'])
+def delete_application(application_id):
+    """Deletar candidatura"""
+    try:
+        # Verificar se candidatura existe
+        existing = supabase.table('applications').select('*').eq('id', application_id).execute()
+        if not existing.data:
+            return jsonify({'error': 'Candidatura não encontrada'}), 404
+        
+        response = supabase.table('applications').delete().eq('id', application_id).execute()
+        
+        return jsonify({'message': 'Candidatura deletada com sucesso'})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/applications/<int:application_id>/stage', methods=['PUT'])
+def move_application_stage(application_id):
+    """Mover candidatura para próxima etapa ou etapa específica"""
+    try:
+        data = request.get_json()
+        action = data.get('action', 'next')  # 'next', 'previous', 'specific'
+        target_stage = data.get('target_stage', type=int)
+        notes = data.get('notes', '')
+        
+        # Buscar candidatura atual
+        current_app = supabase.table('applications').select('*').eq('id', application_id).execute()
+        if not current_app.data:
+            return jsonify({'error': 'Candidatura não encontrada'}), 404
+        
+        current_stage = current_app.data[0]['stage']
+        new_stage = current_stage
+        
+        # Determinar nova etapa
+        if action == 'next':
+            new_stage = min(current_stage + 1, 9)
+        elif action == 'previous':
+            new_stage = max(current_stage - 1, 1)
+        elif action == 'specific' and target_stage:
+            if 1 <= target_stage <= 9:
+                new_stage = target_stage
+            else:
+                return jsonify({'error': 'Etapa deve estar entre 1 e 9'}), 400
+        
+        # Determinar status baseado na etapa
+        status_map = {
+            1: 'applied',
+            2: 'in_progress',
+            3: 'in_progress',
+            4: 'in_progress',
+            5: 'in_progress',
+            6: 'in_progress',
+            7: 'in_progress',
+            8: 'in_progress',
+            9: 'hired'
+        }
+        
+        new_status = status_map.get(new_stage, 'in_progress')
+        
+        # Atualizar candidatura
+        update_data = {
+            'stage': new_stage,
+            'status': new_status,
+            'notes': notes
+        }
+        
+        response = supabase.table('applications').update(update_data).eq('id', application_id).execute()
+        
+        if response.data:
+            return jsonify({
+                'message': f'Candidatura movida para etapa {new_stage}',
+                'application': response.data[0]
+            })
+        else:
+            return jsonify({'error': 'Erro ao mover candidatura'}), 500
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/pipeline', methods=['GET'])
+def get_pipeline():
+    """Obter pipeline Kanban das candidaturas"""
+    try:
+        job_id = request.args.get('job_id', type=int)
+        
+        # Buscar etapas ativas
+        stages_response = supabase.table('recruitment_stages').select('*').eq('is_active', True).order('order_position').execute()
+        stages = stages_response.data
+        
+        # Buscar candidaturas
+        query = supabase.table('applications').select('*')
+        
+        if job_id:
+            query = query.eq('job_id', job_id)
+        
+        query = query.order('applied_at', desc=True)
+        applications_response = query.execute()
+        applications = applications_response.data
+        
+        # Buscar dados relacionados para cada candidatura
+        for app in applications:
+            # Buscar candidato
+            if app.get('candidate_id'):
+                candidate_resp = supabase.table('candidates').select('id, first_name, last_name, email, phone').eq('id', app['candidate_id']).execute()
+                if candidate_resp.data:
+                    app['candidates'] = candidate_resp.data[0]
+            
+            # Buscar vaga
+            if app.get('job_id'):
+                job_resp = supabase.table('jobs').select('id, title, company').eq('id', app['job_id']).execute()
+                if job_resp.data:
+                    app['jobs'] = job_resp.data[0]
+        
+        # Organizar por etapa
+        pipeline = {}
+        for stage in stages:
+            stage_id = stage['id']
+            pipeline[stage_id] = {
+                'stage': stage,
+                'applications': [app for app in applications if app['stage'] == stage_id]
+            }
         
         return jsonify({
-            'status': 'unknown',
-            'message': 'DEBUG: Inserção executada mas candidato não encontrado',
-            'strategy': 'execution_completed'
+            'pipeline': pipeline,
+            'stages': stages,
+            'total_applications': len(applications)
         })
         
     except Exception as e:
-        print(f"❌ Erro geral no debug: {e}")
+        print(f"Erro em get_pipeline: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/pipeline/stats', methods=['GET'])
+def get_pipeline_stats():
+    """Estatísticas do pipeline de candidaturas"""
+    try:
+        job_id = request.args.get('job_id', type=int)
+        
+        # Query base
+        query = supabase.table('applications').select('*')
+        if job_id:
+            query = query.eq('job_id', job_id)
+        
+        response = query.execute()
+        applications = response.data
+        
+        # Calcular estatísticas
+        total_applications = len(applications)
+        
+        # Contagem por status
+        status_count = {}
+        for app in applications:
+            status = app['status']
+            status_count[status] = status_count.get(status, 0) + 1
+        
+        # Contagem por etapa
+        stage_count = {}
+        for app in applications:
+            stage = app['stage']
+            stage_count[stage] = stage_count.get(stage, 0) + 1
+        
+        # Taxa de conversão (candidatos que chegaram à última etapa)
+        hired_count = status_count.get('hired', 0)
+        conversion_rate = (hired_count / total_applications * 100) if total_applications > 0 else 0
+        
+        # Tempo médio no processo (candidatos contratados)
+        hired_apps = [app for app in applications if app['status'] == 'hired']
+        avg_time_to_hire = 0
+        
+        if hired_apps:
+            total_days = 0
+            for app in hired_apps:
+                applied_date = datetime.fromisoformat(app['applied_at'].replace('Z', '+00:00'))
+                updated_date = datetime.fromisoformat(app['updated_at'].replace('Z', '+00:00'))
+                days_diff = (updated_date - applied_date).days
+                total_days += days_diff
+            avg_time_to_hire = total_days / len(hired_apps)
+        
+        return jsonify({
+            'total_applications': total_applications,
+            'status_count': status_count,
+            'stage_count': stage_count,
+            'conversion_rate': round(conversion_rate, 2),
+            'avg_time_to_hire_days': round(avg_time_to_hire, 1),
+            'hired_count': hired_count
+        })
+        
+    except Exception as e:
+        print(f"Erro em get_pipeline_stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/recruitment-stages', methods=['GET'])
+def get_recruitment_stages():
+    """Obter todas as etapas do processo de recrutamento"""
+    try:
+        response = supabase.table('recruitment_stages').select('*').eq('is_active', True).order('order_position').execute()
+        
+        return jsonify({'stages': response.data})
+        
+    except Exception as e:
+        print(f"Erro em get_recruitment_stages: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/applications/<int:application_id>/comments', methods=['GET'])
+def get_application_comments(application_id):
+    """Obter comentários de uma candidatura"""
+    try:
+        response = supabase.table('application_comments').select('*').eq('application_id', application_id).order('created_at', desc=True).execute()
+        
+        return jsonify({'comments': response.data})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/applications/<int:application_id>/comments', methods=['POST'])
+def add_application_comment(application_id):
+    """Adicionar comentário a uma candidatura"""
+    try:
+        data = request.get_json()
+        
+        if not data.get('comment'):
+            return jsonify({'error': 'Comentário é obrigatório'}), 400
+        
+        # Verificar se candidatura existe
+        app_check = supabase.table('applications').select('id').eq('id', application_id).execute()
+        if not app_check.data:
+            return jsonify({'error': 'Candidatura não encontrada'}), 404
+        
+        comment_data = {
+            'application_id': application_id,
+            'comment': data['comment'],
+            'is_internal': data.get('is_internal', True)
+        }
+        
+        response = supabase.table('application_comments').insert(comment_data).execute()
+        
+        if response.data:
+            return jsonify({
+                'message': 'Comentário adicionado com sucesso',
+                'comment': response.data[0]
+            }), 201
+        else:
+            return jsonify({'error': 'Erro ao adicionar comentário'}), 500
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/applications/batch/stage', methods=['PUT'])
+def batch_move_applications():
+    """Mover múltiplas candidaturas para uma etapa"""
+    try:
+        data = request.get_json()
+        application_ids = data.get('application_ids', [])
+        target_stage = data.get('target_stage', type=int)
+        notes = data.get('notes', '')
+        
+        if not application_ids:
+            return jsonify({'error': 'Lista de candidaturas é obrigatória'}), 400
+        
+        if not target_stage or not (1 <= target_stage <= 9):
+            return jsonify({'error': 'Etapa deve estar entre 1 e 9'}), 400
+        
+        # Determinar status baseado na etapa
+        status_map = {
+            1: 'applied', 2: 'in_progress', 3: 'in_progress',
+            4: 'in_progress', 5: 'in_progress', 6: 'in_progress',
+            7: 'in_progress', 8: 'in_progress', 9: 'hired'
+        }
+        
+        new_status = status_map.get(target_stage, 'in_progress')
+        
+        # Atualizar todas as candidaturas
+        update_data = {
+            'stage': target_stage,
+            'status': new_status,
+            'notes': notes
+        }
+        
+        # Usar filter para múltiplos IDs
+        response = supabase.table('applications').update(update_data).in_('id', application_ids).execute()
+        
+        if response.data:
+            return jsonify({
+                'message': f'{len(response.data)} candidaturas movidas para etapa {target_stage}',
+                'updated_count': len(response.data)
+            })
+        else:
+            return jsonify({'error': 'Erro ao mover candidaturas'}), 500
+            
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
@@ -824,7 +1391,7 @@ def debug_insert():
 
 @api.route('/health', methods=['GET'])
 def health_check():
-    """Verificação de saúde da API - ESTRATÉGIA ROBUSTA"""
+    """Verificação de saúde da API"""
     try:
         status = {
             'api': 'ok',
