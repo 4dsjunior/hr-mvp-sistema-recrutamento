@@ -1,20 +1,18 @@
-// 🚨 CORREÇÃO: CandidateForm.tsx - Formulário SEM vinculação automática de vaga
+// 🔧 CORREÇÃO: CandidateForm.tsx - Campos preenchidos na edição
 // Arquivo: frontend/src/components/Candidates/CandidateForm.tsx
 
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { X, Save, User, Mail, Phone, MapPin, FileText, Briefcase, AlertCircle } from 'lucide-react';
+import { X, Save, User, Upload, Camera } from 'lucide-react';
 
-// Types
 interface CandidateFormData {
   first_name: string;
   last_name: string;
   email: string;
-  phone?: string | null;
-  address?: string | null;
-  position: string;
-  summary?: string | null;
-  linkedin?: string | null;
+  phone?: string;
+  address?: string;
+  summary?: string;
+  linkedin?: string;
   status: 'pending' | 'interviewed' | 'approved' | 'rejected';
 }
 
@@ -25,13 +23,14 @@ interface Candidate {
   email: string;
   phone?: string;
   address?: string;
-  position: string;
+  position?: string;
   summary?: string;
   linkedin?: string;
   status: string;
   created_at: string;
   updated_at: string;
-  name: string; // computed field
+  name: string;
+  photo_url?: string;
 }
 
 interface CandidateFormProps {
@@ -64,25 +63,34 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
       email: '',
       phone: '',
       address: '',
-      position: '',
       summary: '',
       linkedin: '',
       status: 'pending'
     }
   });
 
-  // Carregar dados do candidato se estiver editando
+  // ✅ CORREÇÃO: Melhor carregamento de dados na edição
   useEffect(() => {
     if (candidate) {
-      setValue('first_name', candidate.first_name || '');
-      setValue('last_name', candidate.last_name || '');
-      setValue('email', candidate.email || '');
-      setValue('phone', candidate.phone || '');
-      setValue('address', candidate.address || '');
-      setValue('position', candidate.position || '');
-      setValue('summary', candidate.summary || '');
-      setValue('linkedin', candidate.linkedin || '');
-      setValue('status', candidate.status as CandidateFormData['status'] || 'pending');
+      console.log('🔄 Carregando dados completos do candidato:', candidate);
+      
+      // ✅ Usar setTimeout para garantir que setValue funcione
+      setTimeout(() => {
+        setValue('first_name', candidate.first_name || '');
+        setValue('last_name', candidate.last_name || '');
+        setValue('email', candidate.email || '');
+        setValue('phone', candidate.phone || '');
+        setValue('address', candidate.address || '');
+        setValue('summary', candidate.summary || '');
+        setValue('linkedin', candidate.linkedin || '');
+        setValue('status', candidate.status as CandidateFormData['status'] || 'pending');
+        
+        console.log('✅ Valores definidos:', {
+          first_name: candidate.first_name,
+          last_name: candidate.last_name,
+          email: candidate.email
+        });
+      }, 100);
     }
   }, [candidate, setValue]);
 
@@ -92,24 +100,20 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
     try {
       setSubmitting(true);
       
-      // ✅ CORREÇÃO: Dados enviados SEM vinculação forçada de vaga
       const formattedData = {
         first_name: data.first_name.trim(),
         last_name: data.last_name.trim(),
         email: data.email.trim().toLowerCase(),
-        phone: data.phone?.trim() || undefined,
-        address: data.address?.trim() || undefined,
-        position: data.position.trim(),
-        summary: data.summary?.trim() || undefined,
-        linkedin: data.linkedin?.trim() || undefined,
+        phone: data.phone?.trim() || '',
+        address: data.address?.trim() || '',
+        summary: data.summary?.trim() || '',
+        linkedin: data.linkedin?.trim() || '',
         status: data.status,
-        // ❌ REMOVIDO: job_id (será adicionado apenas via pipeline/candidaturas)
       };
       
       console.log('💾 Enviando dados formatados:', formattedData);
       await onSubmit(formattedData);
       
-      // Se for criação e save & continue, limpar formulário
       if (!isEditing && saveAndContinue) {
         reset();
         setSaveAndContinue(false);
@@ -138,8 +142,8 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <User className="h-5 w-5 text-blue-600" />
+            <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
+              <User className="h-5 w-5 text-primary-600" />
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-900">
@@ -161,27 +165,67 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
 
         {/* Form */}
         <form onSubmit={handleSubmit(onSubmitForm)} className="p-6 space-y-6">
+          {/* Upload de Foto - ✅ REMOVIDO "funcionar" do placeholder */}
+          <div className="flex items-center space-x-6">
+            <div className="relative">
+              <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center overflow-hidden">
+                {candidate?.photo_url ? (
+                  <img
+                    src={candidate.photo_url}
+                    alt="Foto do candidato"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <User className="h-12 w-12 text-gray-400" />
+                )}
+              </div>
+              <button
+                type="button"
+                className="absolute bottom-0 right-0 w-8 h-8 bg-primary-600 text-white rounded-full flex items-center justify-center hover:bg-primary-700 transition-colors"
+                onClick={() => {
+                  console.log('📸 Upload de foto - Em desenvolvimento');
+                }}
+              >
+                <Camera className="h-4 w-4" />
+              </button>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Foto do Candidato
+              </label>
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  className="flex items-center space-x-2 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  onClick={() => {
+                    console.log('📁 Upload de foto - Em desenvolvimento');
+                  }}
+                >
+                  <Upload className="h-4 w-4" />
+                  <span>Enviar Foto</span>
+                </button>
+                <p className="text-xs text-gray-500 mt-2">
+                  JPG, PNG ou GIF. Máximo 2MB. (Em desenvolvimento)
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Informações Básicas */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label htmlFor="first_name" className="block text-sm font-medium text-gray-700 mb-2">
-                <User className="h-4 w-4 inline mr-1" />
                 Nome *
               </label>
               <input
                 type="text"
                 id="first_name"
                 {...register('first_name', { required: 'Nome é obrigatório' })}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                  errors.first_name ? 'border-red-300' : 'border-gray-300'
-                }`}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                 placeholder="João"
               />
               {errors.first_name && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <AlertCircle className="h-4 w-4 mr-1" />
-                  {errors.first_name.message}
-                </p>
+                <p className="mt-1 text-sm text-red-600">{errors.first_name.message}</p>
               )}
             </div>
 
@@ -193,22 +237,16 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
                 type="text"
                 id="last_name"
                 {...register('last_name', { required: 'Sobrenome é obrigatório' })}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                  errors.last_name ? 'border-red-300' : 'border-gray-300'
-                }`}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                 placeholder="Silva"
               />
               {errors.last_name && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <AlertCircle className="h-4 w-4 mr-1" />
-                  {errors.last_name.message}
-                </p>
+                <p className="mt-1 text-sm text-red-600">{errors.last_name.message}</p>
               )}
             </div>
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                <Mail className="h-4 w-4 inline mr-1" />
                 Email *
               </label>
               <input
@@ -221,53 +259,51 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
                     message: 'Email inválido',
                   },
                 })}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                  errors.email ? 'border-red-300' : 'border-gray-300'
-                }`}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                 placeholder="joao@email.com"
               />
               {errors.email && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <AlertCircle className="h-4 w-4 mr-1" />
-                  {errors.email.message}
-                </p>
+                <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
               )}
             </div>
 
             <div>
               <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                <Phone className="h-4 w-4 inline mr-1" />
                 Telefone
               </label>
               <input
                 type="tel"
                 id="phone"
                 {...register('phone')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                 placeholder="(11) 99999-9999"
               />
             </div>
 
-            <div>
-              <label htmlFor="position" className="block text-sm font-medium text-gray-700 mb-2">
-                <Briefcase className="h-4 w-4 inline mr-1" />
-                Posição/Cargo *
+            <div className="md:col-span-2">
+              <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
+                Endereço
               </label>
               <input
                 type="text"
-                id="position"
-                {...register('position', { required: 'Posição é obrigatória' })}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                  errors.position ? 'border-red-300' : 'border-gray-300'
-                }`}
-                placeholder="Desenvolvedor Frontend"
+                id="address"
+                {...register('address')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                placeholder="Rua das Flores, 123 - São Paulo, SP"
               />
-              {errors.position && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <AlertCircle className="h-4 w-4 mr-1" />
-                  {errors.position.message}
-                </p>
-              )}
+            </div>
+
+            <div>
+              <label htmlFor="linkedin" className="block text-sm font-medium text-gray-700 mb-2">
+                LinkedIn
+              </label>
+              <input
+                type="url"
+                id="linkedin"
+                {...register('linkedin')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                placeholder="https://linkedin.com/in/joaosilva"
+              />
             </div>
 
             <div>
@@ -277,7 +313,7 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
               <select
                 id="status"
                 {...register('status')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
               >
                 <option value="pending">Ativo</option>
                 <option value="interviewed">Entrevistado</option>
@@ -287,107 +323,59 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
             </div>
           </div>
 
-          {/* Endereço */}
-          <div>
-            <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
-              <MapPin className="h-4 w-4 inline mr-1" />
-              Endereço
-            </label>
-            <input
-              type="text"
-              id="address"
-              {...register('address')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              placeholder="Rua das Flores, 123 - São Paulo, SP"
-            />
-          </div>
-
-          {/* LinkedIn */}
-          <div>
-            <label htmlFor="linkedin" className="block text-sm font-medium text-gray-700 mb-2">
-              LinkedIn
-            </label>
-            <input
-              type="url"
-              id="linkedin"
-              {...register('linkedin')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              placeholder="https://linkedin.com/in/joaosilva"
-            />
-          </div>
-
-          {/* Resumo */}
           <div>
             <label htmlFor="summary" className="block text-sm font-medium text-gray-700 mb-2">
-              <FileText className="h-4 w-4 inline mr-1" />
               Resumo Profissional
             </label>
             <textarea
               id="summary"
               {...register('summary')}
               rows={4}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
               placeholder="Descreva a experiência e habilidades do candidato..."
             />
           </div>
 
-          {/* ✅ AVISO: Vinculação a vagas será feita via Pipeline */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-start">
-              <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 mr-2" />
-              <div>
-                <h4 className="text-sm font-medium text-blue-900">Vinculação a Vagas</h4>
-                <p className="text-sm text-blue-700 mt-1">
-                  Para vincular este candidato a uma vaga específica, acesse o 
-                  <strong> Pipeline de Candidaturas</strong> após salvar o candidato.
-                </p>
-              </div>
-            </div>
-          </div>
-        </form>
-
-        {/* Footer */}
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-end space-x-3">
-          <button
-            type="button"
-            onClick={handleCancel}
-            disabled={submitting || loading}
-            className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            Cancelar
-          </button>
-          
-          {!isEditing && (
+          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
             <button
               type="button"
-              onClick={handleSaveAndContinue}
+              onClick={handleCancel}
               disabled={submitting || loading}
-              className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
             >
-              {submitting && saveAndContinue ? (
+              Cancelar
+            </button>
+            
+            {!isEditing && (
+              <button
+                type="button"
+                onClick={handleSaveAndContinue}
+                disabled={submitting || loading}
+                className="flex items-center space-x-2 px-4 py-2 bg-secondary-600 text-white rounded-lg hover:bg-secondary-700 focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {submitting && saveAndContinue ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                <span>Salvar e Continuar</span>
+              </button>
+            )}
+            
+            <button
+              type="submit"
+              disabled={submitting || loading}
+              className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {submitting && !saveAndContinue ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <Save className="h-4 w-4" />
               )}
-              <span>Salvar e Continuar</span>
+              <span>{isEditing ? 'Salvar Alterações' : 'Salvar Candidato'}</span>
             </button>
-          )}
-          
-          <button
-            type="submit"
-            form="candidate-form"
-            onClick={handleSubmit(onSubmitForm)}
-            disabled={submitting || loading}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {submitting && !saveAndContinue ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            <span>{isEditing ? 'Salvar Alterações' : 'Salvar Candidato'}</span>
-          </button>
-        </div>
+          </div>
+        </form>
       </div>
     </div>
   );

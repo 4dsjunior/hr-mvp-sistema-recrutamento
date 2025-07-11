@@ -1,4 +1,4 @@
-// 🎯 SEMANA 5-6: CRUD de Vagas - Frontend Jobs Page
+// 🔧 CRIAÇÃO: JobsPage.tsx - Página de Vagas Completa
 // Arquivo: frontend/src/pages/JobsPage.tsx
 
 import React, { useState, useEffect } from 'react';
@@ -6,656 +6,387 @@ import {
   Plus, 
   Search, 
   Filter, 
-  MoreHorizontal,
-  Edit,
-  Trash2,
-  Eye,
-  MapPin,
+  Briefcase, 
+  MapPin, 
+  Building, 
   Calendar,
   DollarSign,
-  Building,
   Users,
-  Download,
-  RefreshCw,
-  X
+  Eye,
+  Edit,
+  Trash2,
+  MoreVertical
 } from 'lucide-react';
-import { 
-  jobsApi, 
-  Job, 
-  JobFilters, 
-  JobOptions,
-  formatSalary,
-  formatEmploymentType,
-  formatExperienceLevel,
-  formatStatus,
-  getStatusColor,
-  getEmploymentTypeColor
-} from '../services/jobsApi';
 
-interface JobsPageProps {}
-
-const JobsPage: React.FC<JobsPageProps> = () => {
-  // Estado principal
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Paginação e filtros
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalJobs, setTotalJobs] = useState(0);
-  const [filters, setFilters] = useState<JobFilters>({
-    per_page: 10,
-    search: '',
-    status: '',
-    employment_type: '',
-    experience_level: '',
-    company: ''
-  });
-  
-  // Opções para filtros
-  const [jobOptions, setJobOptions] = useState<JobOptions | null>(null);
-  
-  // Estados da UI
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
-  const [showJobModal, setShowJobModal] = useState(false);
-  const [showJobForm, setShowJobForm] = useState(false);
-  const [editingJob, setEditingJob] = useState<Job | null>(null);
-  
-  // Carregar dados iniciais
-  useEffect(() => {
-    loadJobs();
-    loadJobOptions();
-  }, []);
-  
-  // Recarregar vagas quando filtros mudarem
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      loadJobs();
-    }, 300);
-    
-    return () => clearTimeout(timeoutId);
-  }, [filters, currentPage]);
-  
-  // Função para carregar vagas
-  const loadJobs = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await jobsApi.getJobs({
-        ...filters,
-        page: currentPage
-      });
-      
-      setJobs(response.jobs);
-      setTotalPages(response.total_pages);
-      setTotalJobs(response.total);
-      
-    } catch (err) {
-      setError('Erro ao carregar vagas. Tente novamente.');
-      console.error('Erro ao carregar vagas:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // Carregar opções para filtros
-  const loadJobOptions = async () => {
-    try {
-      const options = await jobsApi.getJobOptions();
-      setJobOptions(options);
-    } catch (err) {
-      console.error('Erro ao carregar opções:', err);
-    }
-  };
-  
-  // Handlers para filtros
-  const handleSearch = (value: string) => {
-    setSearchTerm(value);
-    setFilters(prev => ({ ...prev, search: value }));
-    setCurrentPage(1);
-  };
-  
-  const handleFilterChange = (key: keyof JobFilters, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-    setCurrentPage(1);
-  };
-  
-  const clearFilters = () => {
-    setFilters({
-      per_page: 10,
-      search: '',
-      status: '',
-      employment_type: '',
-      experience_level: '',
-      company: ''
-    });
-    setSearchTerm('');
-    setCurrentPage(1);
-  };
-  
-  // Handlers para ações
-  const handleViewJob = (job: Job) => {
-    setSelectedJob(job);
-    setShowJobModal(true);
-  };
-  
-  const handleEditJob = (job: Job) => {
-    setEditingJob(job);
-    setShowJobForm(true);
-  };
-  
-  const handleDeleteJob = async (job: Job) => {
-    if (!confirm(`Tem certeza que deseja excluir a vaga "${job.title}"?`)) {
-      return;
-    }
-    
-    try {
-      await jobsApi.deleteJob(job.id);
-      loadJobs(); // Recarregar lista
-      alert('Vaga excluída com sucesso!');
-    } catch (err) {
-      alert('Erro ao excluir vaga. Tente novamente.');
-      console.error('Erro ao excluir vaga:', err);
-    }
-  };
-  
-  const handleCreateJob = () => {
-    setEditingJob(null);
-    setShowJobForm(true);
-  };
-  
-  // Exportar vagas
-  const handleExportJobs = async () => {
-    try {
-      const csvContent = await jobsApi.exportJobs(filters);
-      const blob = new Blob([csvContent], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `vagas_${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      alert('Erro ao exportar vagas. Tente novamente.');
-      console.error('Erro ao exportar:', err);
-    }
-  };
-  
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="py-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Vagas</h1>
-                <p className="text-sm text-gray-500 mt-1">
-                  Gerencie todas as vagas de emprego
-                </p>
-              </div>
-              <div className="flex space-x-3">
-                <button
-                  onClick={handleExportJobs}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Exportar
-                </button>
-                <button
-                  onClick={handleCreateJob}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Nova Vaga
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Filtros e Busca */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          {/* Barra de busca */}
-          <div className="flex items-center space-x-4 mb-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Buscar por título, empresa ou descrição..."
-                value={searchTerm}
-                onChange={(e) => handleSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`inline-flex items-center px-4 py-2 border rounded-lg text-sm font-medium ${
-                showFilters 
-                  ? 'border-blue-300 text-blue-700 bg-blue-50' 
-                  : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-              }`}
-            >
-              <Filter className="h-4 w-4 mr-2" />
-              Filtros
-            </button>
-            <button
-              onClick={loadJobs}
-              disabled={loading}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Atualizar
-            </button>
-          </div>
-          
-          {/* Filtros expandidos */}
-          {showFilters && jobOptions && (
-            <div className="border-t pt-4 mt-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Status
-                  </label>
-                  <select
-                    value={filters.status || ''}
-                    onChange={(e) => handleFilterChange('status', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Todos os status</option>
-                    {jobOptions.status_options.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tipo de Emprego
-                  </label>
-                  <select
-                    value={filters.employment_type || ''}
-                    onChange={(e) => handleFilterChange('employment_type', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Todos os tipos</option>
-                    {jobOptions.employment_types.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nível de Experiência
-                  </label>
-                  <select
-                    value={filters.experience_level || ''}
-                    onChange={(e) => handleFilterChange('experience_level', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Todos os níveis</option>
-                    {jobOptions.experience_levels.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Empresa
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Nome da empresa..."
-                    value={filters.company || ''}
-                    onChange={(e) => handleFilterChange('company', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-              </div>
-              
-              <div className="flex justify-end mt-4">
-                <button
-                  onClick={clearFilters}
-                  className="inline-flex items-center px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  Limpar filtros
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-      
-      {/* Lista de Vagas */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <p className="text-red-600">{error}</p>
-          </div>
-        )}
-        
-        {loading ? (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-            <div className="animate-pulse space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="border-b border-gray-200 pb-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="h-5 bg-gray-200 rounded w-1/3 mb-2"></div>
-                      <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
-                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                    </div>
-                    <div className="h-8 bg-gray-200 rounded w-20"></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            {jobs.length === 0 ? (
-              <div className="text-center py-12">
-                <Building className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  Nenhuma vaga encontrada
-                </h3>
-                <p className="text-gray-500 mb-6">
-                  {filters.search || filters.status || filters.employment_type || filters.experience_level || filters.company
-                    ? 'Tente ajustar os filtros de busca.'
-                    : 'Comece criando sua primeira vaga de emprego.'
-                  }
-                </p>
-                {!filters.search && !filters.status && !filters.employment_type && !filters.experience_level && !filters.company && (
-                  <button
-                    onClick={handleCreateJob}
-                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Criar Primeira Vaga
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-200">
-                {jobs.map((job) => (
-                  <JobCard
-                    key={job.id}
-                    job={job}
-                    onView={handleViewJob}
-                    onEdit={handleEditJob}
-                    onDelete={handleDeleteJob}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-        
-        {/* Paginação */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between bg-white px-6 py-3 border-t border-gray-200 mt-6 rounded-lg shadow-sm border">
-            <div className="flex-1 flex justify-between sm:hidden">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
-              >
-                Anterior
-              </button>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="relative ml-3 inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
-              >
-                Próximo
-              </button>
-            </div>
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-gray-700">
-                  Mostrando{' '}
-                  <span className="font-medium">{((currentPage - 1) * 10) + 1}</span>
-                  {' '}a{' '}
-                  <span className="font-medium">
-                    {Math.min(currentPage * 10, totalJobs)}
-                  </span>
-                  {' '}de{' '}
-                  <span className="font-medium">{totalJobs}</span>
-                  {' '}vagas
-                </p>
-              </div>
-              <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    Anterior
-                  </button>
-                  
-                  {[...Array(Math.min(totalPages, 5))].map((_, i) => {
-                    const page = i + 1;
-                    const isActive = page === currentPage;
-                    
-                    return (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page)}
-                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                          isActive
-                            ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
-                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    );
-                  })}
-                  
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    Próximo
-                  </button>
-                </nav>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-      
-      {/* Modais (você implementará estes componentes em seguida) */}
-      {showJobModal && selectedJob && (
-        <JobViewModal
-          job={selectedJob}
-          onClose={() => setShowJobModal(false)}
-        />
-      )}
-      
-      {showJobForm && (
-        <JobFormModal
-          job={editingJob}
-          onClose={() => setShowJobForm(false)}
-          onSave={() => {
-            setShowJobForm(false);
-            loadJobs();
-          }}
-        />
-      )}
-    </div>
-  );
-};
-
-// Componente JobCard
-interface JobCardProps {
-  job: Job;
-  onView: (job: Job) => void;
-  onEdit: (job: Job) => void;
-  onDelete: (job: Job) => void;
+// Types
+interface Job {
+  id: number;
+  title: string;
+  company: string;
+  location: string;
+  description?: string;
+  requirements?: string;
+  employment_type: string;
+  experience_level: string;
+  salary_min?: number;
+  salary_max?: number;
+  status: 'active' | 'paused' | 'closed';
+  created_at: string;
+  updated_at: string;
 }
 
-const JobCard: React.FC<JobCardProps> = ({ job, onView, onEdit, onDelete }) => {
-  const [showMenu, setShowMenu] = useState(false);
-  
+// Mock API calls (substituir por API real depois)
+const mockJobs: Job[] = [
+  {
+    id: 1,
+    title: "Desenvolvedor Frontend React",
+    company: "Tech Solutions Ltd",
+    location: "São Paulo, SP",
+    description: "Vaga para desenvolvedor frontend especializado em React...",
+    requirements: "React, TypeScript, 2+ anos experiência",
+    employment_type: "full-time",
+    experience_level: "mid-level",
+    salary_min: 5000,
+    salary_max: 8000,
+    status: "active",
+    created_at: "2024-07-01T10:00:00Z",
+    updated_at: "2024-07-01T10:00:00Z"
+  },
+  {
+    id: 2,
+    title: "Designer UX/UI",
+    company: "Creative Agency",
+    location: "Rio de Janeiro, RJ",
+    description: "Procuramos designer criativo para projetos inovadores...",
+    requirements: "Figma, Adobe, portfolio strong",
+    employment_type: "full-time",
+    experience_level: "senior",
+    salary_min: 4500,
+    salary_max: 7000,
+    status: "active",
+    created_at: "2024-07-02T10:00:00Z",
+    updated_at: "2024-07-02T10:00:00Z"
+  },
+  {
+    id: 3,
+    title: "Product Manager",
+    company: "Startup Inovadora",
+    location: "Belo Horizonte, MG",
+    description: "Lidere o desenvolvimento de produtos digitais...",
+    requirements: "Experiência em produto, metodologias ágeis",
+    employment_type: "full-time",
+    experience_level: "senior",
+    salary_min: 8000,
+    salary_max: 12000,
+    status: "paused",
+    created_at: "2024-06-25T10:00:00Z",
+    updated_at: "2024-06-25T10:00:00Z"
+  }
+];
+
+const JobsPage: React.FC = () => {
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // Load jobs
+  useEffect(() => {
+    const loadJobs = async () => {
+      setLoading(true);
+      try {
+        // TODO: Substituir por API real
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Simular loading
+        setJobs(mockJobs);
+      } catch (error) {
+        console.error('Erro ao carregar vagas:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadJobs();
+  }, []);
+
+  // Filter jobs
+  const filteredJobs = jobs.filter(job => {
+    const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         job.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         job.location.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || job.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  // Status badge
+  const getStatusBadge = (status: string) => {
+    const styles = {
+      active: 'bg-green-100 text-green-800',
+      paused: 'bg-yellow-100 text-yellow-800',
+      closed: 'bg-red-100 text-red-800'
+    };
+    
+    const labels = {
+      active: 'Ativa',
+      paused: 'Pausada',
+      closed: 'Fechada'
+    };
+    
+    return (
+      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${styles[status as keyof typeof styles]}`}>
+        {labels[status as keyof typeof labels]}
+      </span>
+    );
+  };
+
+  // Format salary
+  const formatSalary = (min?: number, max?: number) => {
+    if (!min && !max) return 'A combinar';
+    if (min && max) return `R$ ${min.toLocaleString()} - R$ ${max.toLocaleString()}`;
+    if (min) return `A partir de R$ ${min.toLocaleString()}`;
+    return `Até R$ ${max?.toLocaleString()}`;
+  };
+
+  // Format date
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('pt-BR');
+  };
+
   return (
-    <div className="p-6 hover:bg-gray-50 transition-colors">
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between mb-2">
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                {job.title}
-              </h3>
-              <div className="flex items-center text-sm text-gray-600 space-x-4 mb-2">
-                <div className="flex items-center">
-                  <Building className="h-4 w-4 mr-1" />
-                  {job.company}
-                </div>
-                {job.location && (
-                  <div className="flex items-center">
-                    <MapPin className="h-4 w-4 mr-1" />
-                    {job.location}
-                  </div>
-                )}
-                <div className="flex items-center">
-                  <DollarSign className="h-4 w-4 mr-1" />
-                  {formatSalary(job.salary_min, job.salary_max)}
-                </div>
-              </div>
-            </div>
-            
-            {/* Status e tipo */}
-            <div className="flex items-center space-x-2 ml-4">
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(job.status)}`}>
-                {formatStatus(job.status)}
-              </span>
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getEmploymentTypeColor(job.employment_type)}`}>
-                {formatEmploymentType(job.employment_type)}
-              </span>
-            </div>
-          </div>
-          
-          {/* Descrição */}
-          {job.description && (
-            <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-              {job.description}
-            </p>
-          )}
-          
-          {/* Metadados */}
-          <div className="flex items-center text-xs text-gray-500 space-x-4">
-            <span>Nível: {formatExperienceLevel(job.experience_level)}</span>
-            <span>•</span>
-            <div className="flex items-center">
-              <Calendar className="h-3 w-3 mr-1" />
-              Criado em {new Date(job.created_at).toLocaleDateString('pt-BR')}
-            </div>
-            {job.application_deadline && (
-              <>
-                <span>•</span>
-                <div className="flex items-center">
-                  <Calendar className="h-3 w-3 mr-1" />
-                  Prazo: {new Date(job.application_deadline).toLocaleDateString('pt-BR')}
-                </div>
-              </>
-            )}
-          </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Vagas de Emprego</h1>
+          <p className="text-gray-600">
+            Gerencie as vagas abertas e acompanhe o processo de recrutamento
+          </p>
         </div>
-        
-        {/* Menu de ações */}
-        <div className="relative ml-4">
-          <button
-            onClick={() => setShowMenu(!showMenu)}
-            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-          
-          {showMenu && (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-              <button
-                onClick={() => {
-                  onView(job);
-                  setShowMenu(false);
-                }}
-                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-              >
-                <Eye className="h-4 w-4 mr-2" />
-                Visualizar
-              </button>
-              <button
-                onClick={() => {
-                  onEdit(job);
-                  setShowMenu(false);
-                }}
-                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                Editar
-              </button>
-              <button
-                onClick={() => {
-                  onDelete(job);
-                  setShowMenu(false);
-                }}
-                className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Excluir
-              </button>
-            </div>
-          )}
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+        >
+          <Plus className="h-4 w-4" />
+          <span>Nova Vaga</span>
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className="flex flex-col sm:flex-row gap-4">
+          {/* Search */}
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar vagas por título, empresa ou localização..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          {/* Status Filter */}
+          <div className="flex items-center space-x-2">
+            <Filter className="h-4 w-4 text-gray-400" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">Todas</option>
+              <option value="active">Ativas</option>
+              <option value="paused">Pausadas</option>
+              <option value="closed">Fechadas</option>
+            </select>
+          </div>
         </div>
       </div>
+
+      {/* Results Summary */}
+      <div className="flex items-center justify-between text-sm text-gray-600">
+        <span>
+          {loading ? 'Carregando...' : `${filteredJobs.length} vaga(s) encontrada(s)`}
+        </span>
+        <span>
+          Total: {jobs.length} vagas
+        </span>
+      </div>
+
+      {/* Jobs Grid */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 animate-pulse">
+              <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
+              <div className="h-3 bg-gray-200 rounded w-1/2 mb-2"></div>
+              <div className="h-3 bg-gray-200 rounded w-2/3 mb-4"></div>
+              <div className="h-8 bg-gray-200 rounded w-full"></div>
+            </div>
+          ))}
+        </div>
+      ) : filteredJobs.length === 0 ? (
+        <div className="text-center py-12">
+          <Briefcase className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma vaga encontrada</h3>
+          <p className="text-gray-600 mb-4">
+            {searchQuery || statusFilter !== 'all' 
+              ? 'Tente ajustar os filtros de busca'
+              : 'Comece criando sua primeira vaga'
+            }
+          </p>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Criar Primeira Vaga</span>
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredJobs.map((job) => (
+            <JobCard key={job.id} job={job} />
+          ))}
+        </div>
+      )}
+
+      {/* Create Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Criar Nova Vaga</h3>
+            <p className="text-gray-600 mb-4">
+              Funcionalidade em desenvolvimento. Em breve você poderá criar e gerenciar vagas completas.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={() => {
+                  // TODO: Implementar criação
+                  console.log('Criar vaga - Em desenvolvimento');
+                  setShowCreateModal(false);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-// Componentes de Modal (placeholders - implementar posteriormente)
-const JobViewModal: React.FC<{ job: Job; onClose: () => void }> = ({ onClose }) => (
-  <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-    <div className="bg-white rounded-lg max-w-2xl w-full max-h-screen overflow-y-auto">
-      <div className="p-6">
-        <p>Modal de visualização de vaga (implementar)</p>
-        <button onClick={onClose} className="mt-4 px-4 py-2 bg-gray-300 rounded">
-          Fechar
-        </button>
-      </div>
-    </div>
-  </div>
-);
+// Job Card Component
+const JobCard: React.FC<{ job: Job }> = ({ job }) => {
+  const [showMenu, setShowMenu] = useState(false);
 
-const JobFormModal: React.FC<{ job: Job | null; onClose: () => void; onSave: () => void }> = ({ onClose }) => (
-  <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-    <div className="bg-white rounded-lg max-w-2xl w-full max-h-screen overflow-y-auto">
-      <div className="p-6">
-        <p>Modal de formulário de vaga (implementar)</p>
-        <button onClick={onClose} className="mt-4 px-4 py-2 bg-gray-300 rounded">
-          Fechar
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex-1">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">{job.title}</h3>
+          <div className="flex items-center text-sm text-gray-600 mb-1">
+            <Building className="h-4 w-4 mr-1" />
+            {job.company}
+          </div>
+          <div className="flex items-center text-sm text-gray-600">
+            <MapPin className="h-4 w-4 mr-1" />
+            {job.location}
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          {/* Status Badge */}
+          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+            job.status === 'active' ? 'bg-green-100 text-green-800' :
+            job.status === 'paused' ? 'bg-yellow-100 text-yellow-800' :
+            'bg-red-100 text-red-800'
+          }`}>
+            {job.status === 'active' ? 'Ativa' : 
+             job.status === 'paused' ? 'Pausada' : 'Fechada'}
+          </span>
+          
+          {/* Menu */}
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="p-1 text-gray-400 hover:text-gray-600 rounded"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+            
+            {showMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10">
+                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center">
+                  <Eye className="h-4 w-4 mr-2" />
+                  Ver Detalhes
+                </button>
+                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center">
+                  <Edit className="h-4 w-4 mr-2" />
+                  Editar
+                </button>
+                <button className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Description */}
+      {job.description && (
+        <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+          {job.description}
+        </p>
+      )}
+
+      {/* Details */}
+      <div className="space-y-2 mb-4">
+        <div className="flex items-center text-sm text-gray-600">
+          <DollarSign className="h-4 w-4 mr-2" />
+          {job.salary_min && job.salary_max 
+            ? `R$ ${job.salary_min.toLocaleString()} - R$ ${job.salary_max.toLocaleString()}`
+            : 'Salário a combinar'
+          }
+        </div>
+        
+        <div className="flex items-center text-sm text-gray-600">
+          <Users className="h-4 w-4 mr-2" />
+          {job.employment_type === 'full-time' ? 'Tempo integral' : 
+           job.employment_type === 'part-time' ? 'Meio período' : 
+           job.employment_type === 'contract' ? 'Contrato' : 'Freelance'}
+        </div>
+        
+        <div className="flex items-center text-sm text-gray-600">
+          <Calendar className="h-4 w-4 mr-2" />
+          Criada em {new Date(job.created_at).toLocaleDateString('pt-BR')}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex space-x-2">
+        <button className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+          Ver Candidatos
+        </button>
+        <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm">
+          Editar
         </button>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default JobsPage;

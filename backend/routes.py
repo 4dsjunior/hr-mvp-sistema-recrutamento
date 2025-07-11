@@ -481,59 +481,221 @@ def search_candidates():
 
 @api.route('/dashboard/metrics', methods=['GET'])
 def get_dashboard_metrics():
-    """Obter métricas para o dashboard"""
+    """Obter métricas ROBUSTAS do Supabase para o dashboard"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        print("📊 GET /dashboard/metrics")
+        print("📊 GET /dashboard/metrics - Buscando métricas ROBUSTAS")
         
-        # Buscar todos os candidatos de forma robusta
-        candidates = robust_search_all_candidates()
+        # ✅ CANDIDATOS
+        print("👥 Buscando candidatos...")
+        try:
+            candidates_response = supabase.table('candidates').select('*').execute()
+            candidates = candidates_response.data or []
+            total_candidates = len(candidates)
+            print(f"✅ Candidatos: {total_candidates}")
+        except Exception as e:
+            print(f"❌ Erro ao buscar candidatos: {e}")
+            candidates = []
+            total_candidates = 0
         
-        # Calcular métricas
-        total_candidates = len(candidates)
+        # ✅ VAGAS - Mais robusto
+        print("💼 Buscando vagas...")
+        try:
+            jobs_response = supabase.table('jobs').select('*').execute()
+            jobs = jobs_response.data or []
+            total_jobs = len(jobs)
+            
+            # Contar por status (verificar valores reais)
+            active_jobs = 0
+            paused_jobs = 0
+            closed_jobs = 0
+            
+            for job in jobs:
+                status = job.get('status', '').lower()
+                if status in ['active', 'ativa', 'open', 'aberta']:
+                    active_jobs += 1
+                elif status in ['paused', 'pausada', 'pause']:
+                    paused_jobs += 1
+                elif status in ['closed', 'fechada', 'close', 'inactive']:
+                    closed_jobs += 1
+                else:
+                    # Status desconhecido, assumir ativa por padrão
+                    active_jobs += 1
+            
+            print(f"✅ Vagas: Total={total_jobs}, Ativas={active_jobs}, Pausadas={paused_jobs}, Fechadas={closed_jobs}")
+            
+        except Exception as e:
+            print(f"❌ Erro ao buscar vagas: {e}")
+            total_jobs = 0
+            active_jobs = 0
+            paused_jobs = 0
+            closed_jobs = 0
         
-        # Contar por status
-        status_counts = {}
+        # ✅ CANDIDATURAS/APPLICATIONS
+        print("📋 Buscando candidaturas...")
+        try:
+            applications_response = supabase.table('applications').select('*').execute()
+            applications = applications_response.data or []
+            total_applications = len(applications)
+            print(f"✅ Candidaturas: {total_applications}")
+            
+            # Contar por status
+            applications_by_status = {}
+            applications_by_stage = {}
+            hired_count = 0
+            
+            for app in applications:
+                # Status
+                status = app.get('status', 'applied')
+                applications_by_status[status] = applications_by_status.get(status, 0) + 1
+                
+                # Stage
+                stage = app.get('stage', 1)
+                applications_by_stage[stage] = applications_by_stage.get(stage, 0) + 1
+                
+                # Contratados
+                if status in ['hired', 'contratado', 'aprovado']:
+                    hired_count += 1
+            
+        except Exception as e:
+            print(f"❌ Erro ao buscar candidaturas: {e}")
+            applications = []
+            total_applications = 0
+            applications_by_status = {}
+            applications_by_stage = {}
+            hired_count = 0
+        
+        # ✅ CANDIDATOS - Status breakdown
+        candidates_by_status = {}
+        approved_candidates = 0
+        
         for candidate in candidates:
             status = candidate.get('status', 'active')
-            status_counts[status] = status_counts.get(status, 0) + 1
-        
-        # Candidatos recentes (últimos 30 dias)
-        recent_candidates = []
-        try:
-            from datetime import datetime, timedelta
-            thirty_days_ago = datetime.now() - timedelta(days=30)
+            candidates_by_status[status] = candidates_by_status.get(status, 0) + 1
             
-            for c in candidates:
-                try:
-                    created_at = datetime.fromisoformat(c['created_at'].replace('Z', '+00:00'))
-                    if created_at > thirty_days_ago:
-                        recent_candidates.append(c)
-                except:
-                    continue
-        except:
-            recent_candidates = []
+            # Contar aprovados/contratados
+            if status in ['approved', 'hired', 'contratado', 'aprovado']:
+                approved_candidates += 1
         
+        # ✅ CÁLCULOS DE MÉTRICAS
+        from datetime import datetime, timedelta
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+        
+        # Candidaturas recentes
+        recent_applications = 0
+        recent_candidates = 0
+        
+        # Applications recentes
+        for app in applications:
+            try:
+                applied_date = datetime.fromisoformat(app.get('applied_at', '').replace('Z', '+00:00'))
+                if applied_date > thirty_days_ago:
+                    recent_applications += 1
+            except:
+                continue
+        
+        # Candidatos recentes (fallback)
+        for candidate in candidates:
+            try:
+                created_date = datetime.fromisoformat(candidate.get('created_at', '').replace('Z', '+00:00'))
+                if created_date > thirty_days_ago:
+                    recent_candidates += 1
+            except:
+                continue
+        
+        # Usar applications se existir, senão candidatos
+        monthly_applications = recent_applications if recent_applications > 0 else recent_candidates
+        
+        # Taxa de conversão
+        conversion_rate = 0
+        if total_applications > 0:
+            conversion_rate = round((hired_count / total_applications) * 100, 1)
+        elif total_candidates > 0:
+            conversion_rate = round((approved_candidates / total_candidates) * 100, 1)
+        
+        # Entrevistas pendentes (stage 5, 6, 7)
+        pending_interviews = (
+            applications_by_stage.get(5, 0) +  # Entrevista RH
+            applications_by_stage.get(6, 0) +  # Entrevista Técnica  
+            applications_by_stage.get(7, 0)    # Verificação Referências
+        )
+        
+        # ✅ MONTAR MÉTRICAS FINAIS
         metrics = {
+            # Métricas principais
             'total_candidates': total_candidates,
-            'active_jobs': 5,  # placeholder
-            'monthly_applications': len(recent_candidates),
-            'conversion_rate': round((status_counts.get('approved', 0) / max(total_candidates, 1)) * 100, 1),
-            'pending_interviews': status_counts.get('interviewed', 0),
-            'status_breakdown': status_counts,
-            'last_updated': datetime.now().isoformat()
+            'active_jobs': active_jobs,
+            'total_jobs': total_jobs,
+            'monthly_applications': monthly_applications,
+            'conversion_rate': conversion_rate,
+            'pending_interviews': pending_interviews,
+            
+            # Métricas detalhadas
+            'total_applications': total_applications,
+            'hired_count': hired_count,
+            'approved_candidates': approved_candidates,
+            'paused_jobs': paused_jobs,
+            'closed_jobs': closed_jobs,
+            'recent_applications_30d': recent_applications,
+            'recent_candidates_30d': recent_candidates,
+            
+            # Breakdowns
+            'candidates_status_breakdown': candidates_by_status,
+            'applications_status_breakdown': applications_by_status,
+            'applications_stage_breakdown': applications_by_stage,
+            'jobs_status_breakdown': {
+                'active': active_jobs,
+                'paused': paused_jobs,
+                'closed': closed_jobs
+            },
+            
+            # Meta informações
+            'last_updated': datetime.now().isoformat(),
+            'data_health': {
+                'candidates_table': 'ok' if total_candidates > 0 else 'empty',
+                'jobs_table': 'ok' if total_jobs > 0 else 'empty',
+                'applications_table': 'ok' if total_applications > 0 else 'empty'
+            },
+            
+            # Debug
+            'debug_raw_counts': {
+                'candidates': total_candidates,
+                'jobs': total_jobs,
+                'applications': total_applications,
+                'jobs_by_status': {job.get('status', 'unknown'): 1 for job in jobs},
+                'first_job_status': jobs[0].get('status') if jobs else None,
+                'first_application_status': applications[0].get('status') if applications else None
+            }
         }
         
-        print(f"✅ Métricas calculadas: {metrics}")
+        print("✅ MÉTRICAS ROBUSTAS CALCULADAS:")
+        print(f"   📊 Candidatos: {total_candidates}")
+        print(f"   💼 Vagas Total: {total_jobs}")
+        print(f"   🟢 Vagas Ativas: {active_jobs}")
+        print(f"   📋 Candidaturas: {total_applications}")
+        print(f"   📈 Taxa Conversão: {conversion_rate}%")
+        print(f"   ✅ Contratados: {hired_count}")
+        
         return jsonify(metrics)
         
     except Exception as e:
-        print(f"❌ Erro ao calcular métricas: {e}")
+        print(f"❌ ERRO CRÍTICO: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        
+        # Fallback básico
+        return jsonify({
+            'total_candidates': 0,
+            'active_jobs': 0,
+            'total_jobs': 0,
+            'monthly_applications': 0,
+            'conversion_rate': 0,
+            'pending_interviews': 0,
+            'error': f'Erro: {str(e)}',
+            'fallback': True
+        }), 200
 
 # =============================================================================
 # JOBS ENDPOINTS

@@ -1,4 +1,4 @@
-// 🚨 CORREÇÃO: useAuth.ts - Hook de Autenticação com Logout Funcional
+// 🔧 CORREÇÃO: useAuth.tsx - SEM mensagens repetitivas
 // Arquivo: frontend/src/hooks/useAuth.ts
 
 import { useState, useEffect, createContext, useContext } from 'react';
@@ -51,7 +51,7 @@ export const useAuth = (): AuthContextType => {
 
     getCurrentSession();
 
-    // Escutar mudanças de autenticação
+    // ✅ CORREÇÃO: Escutar mudanças SEM toast repetitivo
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session: Session | null) => {
         console.log('🔄 Mudança de estado de auth:', event, session ? 'com sessão' : 'sem sessão');
@@ -60,10 +60,10 @@ export const useAuth = (): AuthContextType => {
         setUser(session?.user ?? null);
         setLoading(false);
 
-        // Logs para debug
-        if (event === 'SIGNED_IN') {
-          console.log('✅ Usuário logado:', session?.user?.email);
-          toast.success(`Bem-vindo! ${session?.user?.email}`);
+        // ✅ CORREÇÃO: Só mostrar toast em eventos específicos (não INITIAL_SESSION)
+        if (event === 'SIGNED_IN' && session) {
+          console.log('✅ Usuário logado:', session.user.email);
+          // ❌ REMOVIDO: toast bem-vindo repetitivo
         } else if (event === 'SIGNED_OUT') {
           console.log('👋 Usuário deslogado');
           toast.success('Logout realizado com sucesso');
@@ -89,7 +89,6 @@ export const useAuth = (): AuthContextType => {
       if (error) {
         console.error('❌ Erro no login:', error);
         
-        // Mensagens de erro específicas
         if (error.message.includes('Invalid login credentials')) {
           throw new Error('Email ou senha incorretos');
         } else if (error.message.includes('Email not confirmed')) {
@@ -105,7 +104,8 @@ export const useAuth = (): AuthContextType => {
 
       console.log('✅ Login realizado com sucesso:', data.user.email);
       
-      // O estado será atualizado automaticamente pelo onAuthStateChange
+      // ✅ CORREÇÃO: Toast de bem-vindo apenas no login manual
+      toast.success(`Bem-vindo de volta!`);
       
     } catch (error: any) {
       console.error('❌ Erro no signIn:', error);
@@ -130,17 +130,13 @@ export const useAuth = (): AuthContextType => {
 
       console.log('✅ Logout realizado com sucesso');
       
-      // Limpar estado local imediatamente
       setUser(null);
       setSession(null);
-      
-      // O onAuthStateChange também será chamado, mas já limpamos aqui
       
     } catch (error: any) {
       console.error('❌ Erro no signOut:', error);
       toast.error('Erro ao fazer logout');
       
-      // Mesmo com erro, limpar estado local
       setUser(null);
       setSession(null);
       
@@ -162,7 +158,6 @@ export const useAuth = (): AuthContextType => {
   };
 };
 
-// Provider (opcional - se você quiser usar Context)
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const auth = useAuth();
   
@@ -173,7 +168,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-// Hook para usar o context (opcional)
 export const useAuthContext = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
