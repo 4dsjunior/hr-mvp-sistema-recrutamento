@@ -8,17 +8,23 @@ from datetime import datetime
 from decimal import Decimal
 import json
 
+from dotenv import load_dotenv
+load_dotenv()
+
 api = Blueprint('api', __name__)
 
 # Configuração Supabase
 try:
+    print(f"🔍 URL: {os.getenv('SUPABASE_URL')}")
+    print(f"🔍 KEY: {os.getenv('SUPABASE_KEY', 'AUSENTE')[:20]}...")
+    
     supabase = create_client(
         os.getenv('SUPABASE_URL'), 
         os.getenv('SUPABASE_KEY')
     )
-    print("Supabase conectado com sucesso")
+    print("✅ Supabase conectado com sucesso")
 except Exception as e:
-    print(f"Erro ao conectar Supabase: {e}")
+    print(f"❌ Erro ao conectar Supabase: {e}")
     supabase = None
 
 @api.route('/test', methods=['GET'])

@@ -1,4 +1,4 @@
-// 🔧 CORREÇÃO: PipelinePage.tsx - Corrigir erros TypeScript
+// 🔧 CORREÇÃO: PipelinePage.tsx - Código Completo Corrigido
 // Arquivo: frontend/src/pages/PipelinePage.tsx
 
 import React, { useState, useEffect } from 'react';
@@ -175,7 +175,7 @@ const PipelinePage: React.FC = () => {
   const [availableJobs, setAvailableJobs] = useState<Job[]>([]);
   const [stats, setStats] = useState<PipelineStats | null>(null);
 
-  // ✅ CARREGAR PIPELINE COMPLETO
+  // ✅ CARREGAR PIPELINE COMPLETO - CORREÇÃO APLICADA
   const loadPipeline = async () => {
     setLoading(true);
     setError(null);
@@ -183,11 +183,16 @@ const PipelinePage: React.FC = () => {
       // Determinar filtro de vaga
       const jobFilter = selectedJob === 'all' ? undefined : Number(selectedJob);
       
-      // Carregar pipeline e estatísticas
-      const [pipelineData, statsData] = await Promise.all([
-        pipelineApi.getPipeline(jobFilter),
-        pipelineApi.getStats(jobFilter)
-      ]);
+      // ✅ CORREÇÃO: Carregar pipeline sequencialmente ao invés de Promise.all
+      console.log('🔍 Carregando pipeline sequencialmente...');
+
+      // 1. Carregar pipeline primeiro  
+      const pipelineData = await pipelineApi.getPipeline(jobFilter);
+      console.log('✅ Pipeline carregado');
+
+      // 2. Carregar estatísticas depois
+      const statsData = await pipelineApi.getStats(jobFilter);
+      console.log('✅ Estatísticas carregadas');
       
       setStages(pipelineData.stages);
       setApplications(pipelineData.applications);
