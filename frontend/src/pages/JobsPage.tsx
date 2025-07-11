@@ -1,4 +1,4 @@
-// 🔧 CRIAÇÃO: JobsPage.tsx - Página de Vagas Completa
+// 🔧 CORREÇÃO: JobsPage.tsx - Exibir TODAS as 13 vagas do Supabase
 // Arquivo: frontend/src/pages/JobsPage.tsx
 
 import React, { useState, useEffect } from 'react';
@@ -15,10 +15,17 @@ import {
   Eye,
   Edit,
   Trash2,
-  MoreVertical
+  MoreVertical,
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
-// Types
+// ============================================================================
+// INTERFACES E TIPOS
+// ============================================================================
+
 interface Job {
   id: number;
   title: string;
@@ -33,170 +40,216 @@ interface Job {
   status: 'active' | 'paused' | 'closed';
   created_at: string;
   updated_at: string;
+  department?: string;
+  benefits?: string;
+  applications_count?: number;
 }
 
-// Mock API calls (substituir por API real depois)
-const mockJobs: Job[] = [
-  {
-    id: 1,
-    title: "Desenvolvedor Frontend React",
-    company: "Tech Solutions Ltd",
-    location: "São Paulo, SP",
-    description: "Vaga para desenvolvedor frontend especializado em React...",
-    requirements: "React, TypeScript, 2+ anos experiência",
-    employment_type: "full-time",
-    experience_level: "mid-level",
-    salary_min: 5000,
-    salary_max: 8000,
-    status: "active",
-    created_at: "2024-07-01T10:00:00Z",
-    updated_at: "2024-07-01T10:00:00Z"
+interface JobsResponse {
+  jobs: Job[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+  filters_applied?: any;
+}
+
+// ============================================================================
+// API CALLS
+// ============================================================================
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+const jobsApi = {
+  // ✅ Buscar TODAS as vagas do Supabase
+  getAll: async (): Promise<JobsResponse> => {
+    try {
+      console.log('🔍 Buscando TODAS as vagas do Supabase...');
+      const response = await axios.get(`${API_BASE_URL}/jobs?per_page=50`, {
+        timeout: 10000
+      });
+      console.log('✅ Resposta da API de vagas:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ Erro ao carregar vagas:', error);
+      throw new Error(error.response?.data?.error || 'Erro ao carregar vagas');
+    }
   },
-  {
-    id: 2,
-    title: "Designer UX/UI",
-    company: "Creative Agency",
-    location: "Rio de Janeiro, RJ",
-    description: "Procuramos designer criativo para projetos inovadores...",
-    requirements: "Figma, Adobe, portfolio strong",
-    employment_type: "full-time",
-    experience_level: "senior",
-    salary_min: 4500,
-    salary_max: 7000,
-    status: "active",
-    created_at: "2024-07-02T10:00:00Z",
-    updated_at: "2024-07-02T10:00:00Z"
-  },
-  {
-    id: 3,
-    title: "Product Manager",
-    company: "Startup Inovadora",
-    location: "Belo Horizonte, MG",
-    description: "Lidere o desenvolvimento de produtos digitais...",
-    requirements: "Experiência em produto, metodologias ágeis",
-    employment_type: "full-time",
-    experience_level: "senior",
-    salary_min: 8000,
-    salary_max: 12000,
-    status: "paused",
-    created_at: "2024-06-25T10:00:00Z",
-    updated_at: "2024-06-25T10:00:00Z"
+
+  // Buscar candidatos de uma vaga específica
+  getCandidates: async (jobId: number): Promise<any> => {
+    try {
+      console.log(`🔍 Buscando candidatos da vaga ${jobId}...`);
+      const response = await axios.get(`${API_BASE_URL}/applications?job_id=${jobId}`);
+      console.log('✅ Candidatos encontrados:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar candidatos:', error);
+      throw new Error(error.response?.data?.error || 'Erro ao buscar candidatos');
+    }
   }
-];
+};
+
+// ============================================================================
+// COMPONENTE PRINCIPAL
+// ============================================================================
 
 const JobsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [showCandidatesModal, setShowCandidatesModal] = useState(false);
+  const [candidatesData, setCandidatesData] = useState<any>(null);
 
-  // Load jobs
+  // ✅ CARREGAR VAGAS REAIS DO SUPABASE
+  const loadJobs = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const jobsResponse = await jobsApi.getAll();
+      const jobsList = jobsResponse.jobs || [];
+      setJobs(jobsList);
+      console.log(`✅ ${jobsList.length} vagas carregadas:`, jobsList);
+    } catch (err: any) {
+      console.error('❌ Erro ao carregar vagas:', err);
+      setError(err.message);
+      setJobs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Carregar vagas na inicialização
   useEffect(() => {
-    const loadJobs = async () => {
-      setLoading(true);
-      try {
-        // TODO: Substituir por API real
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Simular loading
-        setJobs(mockJobs);
-      } catch (error) {
-        console.error('Erro ao carregar vagas:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadJobs();
   }, []);
 
-  // Filter jobs
+  // ✅ FILTRAR VAGAS
   const filteredJobs = jobs.filter(job => {
-    const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         job.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         job.location.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = !searchQuery || 
+      job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.location.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || job.status === statusFilter;
     
     return matchesSearch && matchesStatus;
   });
 
-  // Status badge
-  const getStatusBadge = (status: string) => {
-    const styles = {
-      active: 'bg-green-100 text-green-800',
-      paused: 'bg-yellow-100 text-yellow-800',
-      closed: 'bg-red-100 text-red-800'
-    };
-    
-    const labels = {
-      active: 'Ativa',
-      paused: 'Pausada',
-      closed: 'Fechada'
-    };
-    
-    return (
-      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${styles[status as keyof typeof styles]}`}>
-        {labels[status as keyof typeof labels]}
-      </span>
-    );
+  // ✅ VER CANDIDATOS DE UMA VAGA
+  const handleViewCandidates = async (job: Job) => {
+    try {
+      setSelectedJob(job);
+      console.log(`🔍 Abrindo candidatos da vaga: ${job.title}`);
+      
+      // Buscar candidatos da vaga
+      const candidates = await jobsApi.getCandidates(job.id);
+      setCandidatesData(candidates);
+      setShowCandidatesModal(true);
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar candidatos:', error);
+      alert('Erro ao buscar candidatos: ' + error.message);
+    }
   };
 
-  // Format salary
-  const formatSalary = (min?: number, max?: number) => {
-    if (!min && !max) return 'A combinar';
+  // ✅ FORMATAÇÃO DE SALÁRIO
+  const formatSalary = (min?: number, max?: number): string => {
+    if (!min && !max) return 'Salário não informado';
     if (min && max) return `R$ ${min.toLocaleString()} - R$ ${max.toLocaleString()}`;
     if (min) return `A partir de R$ ${min.toLocaleString()}`;
-    return `Até R$ ${max?.toLocaleString()}`;
+    if (max) return `Até R$ ${max.toLocaleString()}`;
+    return 'Salário não informado';
   };
 
-  // Format date
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR');
+  // ✅ FORMATAÇÃO DE DATA
+  const formatDate = (dateString: string): string => {
+    try {
+      return new Date(dateString).toLocaleDateString('pt-BR');
+    } catch {
+      return dateString;
+    }
   };
+
+  // ✅ STATUS COLOR
+  const getStatusColor = (status: string): string => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'paused': return 'bg-yellow-100 text-yellow-800';
+      case 'closed': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // ✅ STATUS LABEL
+  const getStatusLabel = (status: string): string => {
+    switch (status) {
+      case 'active': return 'Ativa';
+      case 'paused': return 'Pausada';
+      case 'closed': return 'Fechada';
+      default: return status;
+    }
+  };
+
+  // ============================================================================
+  // RENDER
+  // ============================================================================
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Vagas de Emprego</h1>
-          <p className="text-gray-600">
-            Gerencie as vagas abertas e acompanhe o processo de recrutamento
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">Vagas</h1>
+          <p className="text-gray-600">Gerencie as vagas disponíveis na empresa</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Nova Vaga</span>
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={loadJobs}
+            disabled={loading}
+            className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Atualizar
+          </button>
+          <button
+            onClick={() => console.log('Criar nova vaga - TODO')}
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Vaga
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
         <div className="flex flex-col sm:flex-row gap-4">
           {/* Search */}
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar vagas por título, empresa ou localização..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <input
+                type="text"
+                placeholder="Buscar vagas por título, empresa ou localização..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
           </div>
-
+          
           {/* Status Filter */}
-          <div className="flex items-center space-x-2">
-            <Filter className="h-4 w-4 text-gray-400" />
+          <div className="sm:w-48">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="all">Todas</option>
+              <option value="all">Todos os status</option>
               <option value="active">Ativas</option>
               <option value="paused">Pausadas</option>
               <option value="closed">Fechadas</option>
@@ -205,186 +258,254 @@ const JobsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Results Summary */}
-      <div className="flex items-center justify-between text-sm text-gray-600">
-        <span>
-          {loading ? 'Carregando...' : `${filteredJobs.length} vaga(s) encontrada(s)`}
-        </span>
-        <span>
-          Total: {jobs.length} vagas
-        </span>
-      </div>
-
-      {/* Jobs Grid */}
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3, 4, 5, 6].map(i => (
-            <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
-              <div className="h-3 bg-gray-200 rounded w-1/2 mb-2"></div>
-              <div className="h-3 bg-gray-200 rounded w-2/3 mb-4"></div>
-              <div className="h-8 bg-gray-200 rounded w-full"></div>
-            </div>
-          ))}
+      {/* Loading State */}
+      {loading && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+          <div className="flex items-center justify-center space-x-3">
+            <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-gray-600">Carregando vagas...</span>
+          </div>
         </div>
-      ) : filteredJobs.length === 0 ? (
-        <div className="text-center py-12">
-          <Briefcase className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma vaga encontrada</h3>
-          <p className="text-gray-600 mb-4">
-            {searchQuery || statusFilter !== 'all' 
-              ? 'Tente ajustar os filtros de busca'
-              : 'Comece criando sua primeira vaga'
-            }
-          </p>
+      )}
+
+      {/* Error State */}
+      {error && !loading && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center space-x-3">
+            <AlertCircle className="h-5 w-5 text-red-600" />
+            <div>
+              <h3 className="text-red-800 font-medium">Erro ao carregar vagas</h3>
+              <p className="text-red-600 text-sm">{error}</p>
+            </div>
+          </div>
           <button
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            onClick={loadJobs}
+            className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
           >
-            <Plus className="h-4 w-4" />
-            <span>Criar Primeira Vaga</span>
+            Tentar novamente
           </button>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      )}
+
+      {/* Jobs Stats */}
+      {!loading && !error && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              Mostrando {filteredJobs.length} de {jobs.length} vagas
+            </div>
+            <div className="flex items-center space-x-4 text-sm">
+              <span className="text-green-600">
+                {jobs.filter(j => j.status === 'active').length} Ativas
+              </span>
+              <span className="text-yellow-600">
+                {jobs.filter(j => j.status === 'paused').length} Pausadas
+              </span>
+              <span className="text-red-600">
+                {jobs.filter(j => j.status === 'closed').length} Fechadas
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Jobs List */}
+      {!loading && !error && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredJobs.map((job) => (
-            <JobCard key={job.id} job={job} />
+            <div key={job.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              {/* Header */}
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                    {job.title}
+                  </h3>
+                  <div className="flex items-center text-sm text-gray-600 space-x-4">
+                    <span className="flex items-center">
+                      <Building className="h-4 w-4 mr-1" />
+                      {job.company}
+                    </span>
+                  </div>
+                </div>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(job.status)}`}>
+                  {getStatusLabel(job.status)}
+                </span>
+              </div>
+
+              {/* Details */}
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center text-sm text-gray-600">
+                  <MapPin className="h-4 w-4 mr-2" />
+                  {job.location}
+                </div>
+                <div className="flex items-center text-sm text-gray-600">
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  {formatSalary(job.salary_min, job.salary_max)}
+                </div>
+                <div className="flex items-center text-sm text-gray-600">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Criada em {formatDate(job.created_at)}
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                  {job.employment_type}
+                </span>
+                <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">
+                  {job.experience_level}
+                </span>
+              </div>
+
+              {/* Description */}
+              {job.description && (
+                <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                  {job.description}
+                </p>
+              )}
+
+              {/* Actions */}
+              <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                <button
+                  onClick={() => handleViewCandidates(job)}
+                  className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  <Users className="h-4 w-4 mr-1" />
+                  Ver Candidatos ({job.applications_count || 0})
+                </button>
+                
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => console.log('Ver detalhes', job.id)}
+                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Ver detalhes"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => console.log('Editar vaga', job.id)}
+                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Editar"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => console.log('Menu', job.id)}
+                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Mais opções"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       )}
 
-      {/* Create Modal */}
-      {showCreateModal && (
+      {/* Empty State */}
+      {!loading && !error && filteredJobs.length === 0 && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+          <Briefcase className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {jobs.length === 0 ? 'Nenhuma vaga encontrada' : 'Nenhuma vaga corresponde aos filtros'}
+          </h3>
+          <p className="text-gray-600 mb-4">
+            {jobs.length === 0 
+              ? 'Comece criando sua primeira vaga de emprego.'
+              : 'Tente ajustar os filtros de busca.'
+            }
+          </p>
+          {jobs.length === 0 && (
+            <button
+              onClick={() => console.log('Criar primeira vaga')}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Criar Primeira Vaga
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Modal de Candidatos */}
+      {showCandidatesModal && selectedJob && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Criar Nova Vaga</h3>
-            <p className="text-gray-600 mb-4">
-              Funcionalidade em desenvolvimento. Em breve você poderá criar e gerenciar vagas completas.
-            </p>
-            <div className="flex justify-end space-x-3">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Candidatos - {selectedJob.title}
+                  </h2>
+                  <p className="text-gray-600">{selectedJob.company}</p>
+                </div>
+                <button
+                  onClick={() => setShowCandidatesModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {candidatesData ? (
+                candidatesData.applications && candidatesData.applications.length > 0 ? (
+                  <div className="space-y-4">
+                    {candidatesData.applications.map((app: any) => (
+                      <div key={app.id} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-medium text-gray-900">
+                              {app.candidates?.first_name} {app.candidates?.last_name}
+                            </h4>
+                            <p className="text-sm text-gray-600">{app.candidates?.email}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Etapa {app.stage} • Status: {app.status}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => navigate('/pipeline')}
+                            className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                          >
+                            Ver no Pipeline
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      Nenhum candidato ainda
+                    </h3>
+                    <p className="text-gray-600">
+                      Esta vaga ainda não recebeu candidaturas.
+                    </p>
+                  </div>
+                )
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-gray-600">Carregando candidatos...</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 border-t border-gray-200 flex justify-end">
               <button
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                onClick={() => setShowCandidatesModal(false)}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
               >
                 Fechar
               </button>
-              <button
-                onClick={() => {
-                  // TODO: Implementar criação
-                  console.log('Criar vaga - Em desenvolvimento');
-                  setShowCreateModal(false);
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Entendi
-              </button>
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
-};
-
-// Job Card Component
-const JobCard: React.FC<{ job: Job }> = ({ job }) => {
-  const [showMenu, setShowMenu] = useState(false);
-
-  return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">{job.title}</h3>
-          <div className="flex items-center text-sm text-gray-600 mb-1">
-            <Building className="h-4 w-4 mr-1" />
-            {job.company}
-          </div>
-          <div className="flex items-center text-sm text-gray-600">
-            <MapPin className="h-4 w-4 mr-1" />
-            {job.location}
-          </div>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          {/* Status Badge */}
-          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-            job.status === 'active' ? 'bg-green-100 text-green-800' :
-            job.status === 'paused' ? 'bg-yellow-100 text-yellow-800' :
-            'bg-red-100 text-red-800'
-          }`}>
-            {job.status === 'active' ? 'Ativa' : 
-             job.status === 'paused' ? 'Pausada' : 'Fechada'}
-          </span>
-          
-          {/* Menu */}
-          <div className="relative">
-            <button
-              onClick={() => setShowMenu(!showMenu)}
-              className="p-1 text-gray-400 hover:text-gray-600 rounded"
-            >
-              <MoreVertical className="h-4 w-4" />
-            </button>
-            
-            {showMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10">
-                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center">
-                  <Eye className="h-4 w-4 mr-2" />
-                  Ver Detalhes
-                </button>
-                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center">
-                  <Edit className="h-4 w-4 mr-2" />
-                  Editar
-                </button>
-                <button className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Excluir
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Description */}
-      {job.description && (
-        <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-          {job.description}
-        </p>
-      )}
-
-      {/* Details */}
-      <div className="space-y-2 mb-4">
-        <div className="flex items-center text-sm text-gray-600">
-          <DollarSign className="h-4 w-4 mr-2" />
-          {job.salary_min && job.salary_max 
-            ? `R$ ${job.salary_min.toLocaleString()} - R$ ${job.salary_max.toLocaleString()}`
-            : 'Salário a combinar'
-          }
-        </div>
-        
-        <div className="flex items-center text-sm text-gray-600">
-          <Users className="h-4 w-4 mr-2" />
-          {job.employment_type === 'full-time' ? 'Tempo integral' : 
-           job.employment_type === 'part-time' ? 'Meio período' : 
-           job.employment_type === 'contract' ? 'Contrato' : 'Freelance'}
-        </div>
-        
-        <div className="flex items-center text-sm text-gray-600">
-          <Calendar className="h-4 w-4 mr-2" />
-          Criada em {new Date(job.created_at).toLocaleDateString('pt-BR')}
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="flex space-x-2">
-        <button className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
-          Ver Candidatos
-        </button>
-        <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm">
-          Editar
-        </button>
-      </div>
     </div>
   );
 };
