@@ -1,4 +1,4 @@
-// 🚨 CORREÇÃO: App.tsx - Arquivo Corrigido
+// 🚨 CORREÇÃO CRÍTICA: App.tsx - Sistema de Rotas Corrigido
 // Arquivo: frontend/src/App.tsx
 
 import React from 'react';
@@ -25,8 +25,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 font-medium">Carregando sistema...</p>
+        </div>
       </div>
     );
   }
@@ -39,34 +42,24 @@ function App() {
     <Router>
       <div className="App">
         <Routes>
-          {/* Rota pública */}
+          {/* Rota pública - Login */}
           <Route path="/login" element={<LoginPage />} />
           
-          {/* Rotas protegidas */}
+          {/* Rotas protegidas - Layout com Outlet */}
           <Route path="/" element={
             <ProtectedRoute>
-              <Layout>
-                <Routes>
-                  {/* Dashboard */}
-                  <Route index element={<DashboardPage />} />
-                  
-                  {/* Candidatos */}
-                  <Route path="candidates" element={<CandidatesPage />} />
-                  
-                  {/* Vagas */}
-                  <Route path="jobs" element={<JobsPage />} />
-                  
-                  {/* Pipeline de Candidaturas */}
-                  <Route path="pipeline" element={<PipelinePage />} />
-                  
-                  {/* Relatórios */}
-                  <Route path="reports" element={<ReportsPage />} />
-                </Routes>
-              </Layout>
+              <Layout />
             </ProtectedRoute>
-          } />
+          }>
+            {/* Rotas filhas que serão renderizadas no <Outlet /> */}
+            <Route index element={<DashboardPage />} />
+            <Route path="candidates" element={<CandidatesPage />} />
+            <Route path="jobs" element={<JobsPage />} />
+            <Route path="pipeline" element={<PipelinePage />} />
+            <Route path="reports" element={<ReportsPage />} />
+          </Route>
           
-          {/* Redirect para dashboard se logado */}
+          {/* Redirect qualquer rota não encontrada */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         
@@ -78,6 +71,28 @@ function App() {
             style: {
               background: '#363636',
               color: '#fff',
+              fontSize: '14px',
+              fontWeight: '500',
+            },
+            success: {
+              style: {
+                background: '#10b981',
+                color: '#fff',
+              },
+              iconTheme: {
+                primary: '#fff',
+                secondary: '#10b981',
+              },
+            },
+            error: {
+              style: {
+                background: '#ef4444',
+                color: '#fff',
+              },
+              iconTheme: {
+                primary: '#fff',
+                secondary: '#ef4444',
+              },
             },
           }}
         />
