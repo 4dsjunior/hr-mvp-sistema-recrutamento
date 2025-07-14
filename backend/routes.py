@@ -4,7 +4,7 @@
 from flask import Blueprint, request, jsonify
 from supabase import create_client, Client
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 import json
 
@@ -482,87 +482,200 @@ def search_candidates():
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
-# DASHBOARD METRICS
+# DASHBOARD METRICS - VERSÃO AVANÇADA
 # =============================================================================
 
 @api.route('/dashboard/metrics', methods=['GET'])
 def get_dashboard_metrics():
-    """Obter métricas CORRETAS do dashboard baseadas nos dados reais"""
+    """Obter métricas COMPLETAS do dashboard com dados em tempo real"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
         
-        print("📊 GET /dashboard/metrics - Calculando métricas REAIS")
+        print("📊 GET /dashboard/metrics - Calculando métricas COMPLETAS")
         
-        # ✅ 1. TOTAL DE CANDIDATOS (35 conforme CSV)
+        from datetime import datetime, timedelta
+        
+        # ✅ 1. MÉTRICAS PRINCIPAIS
         print("👥 Buscando candidatos...")
         candidates_response = supabase.table('candidates').select('id, status, created_at').execute()
         total_candidates = len(candidates_response.data) if candidates_response.data else 0
-        print(f"   Total candidatos: {total_candidates}")
         
-        # ✅ 2. VAGAS ATIVAS (11 ativas conforme análise)
         print("💼 Buscando vagas ativas...")
         try:
             jobs_response = supabase.table('jobs').select('id, status').eq('status', 'active').execute()
             active_jobs = len(jobs_response.data) if jobs_response.data else 0
-            print(f"   Vagas ativas: {active_jobs}")
         except Exception as e:
             print(f"   ⚠️ Erro ao buscar vagas: {e}")
-            active_jobs = 11  # Valor fixo baseado na análise
+            active_jobs = 0
         
-        # ✅ 3. CANDIDATURAS DO MÊS (baseado em applications)
         print("🔄 Buscando candidaturas...")
         try:
-            applications_response = supabase.table('applications').select('id, applied_at, status, stage').execute()
+            applications_response = supabase.table('applications').select('*').execute()
             applications = applications_response.data if applications_response.data else []
             
-            # Candidaturas do mês atual
-            from datetime import datetime, timedelta
+            # ✅ 2. CANDIDATURAS DO MÊS ATUAL
             current_month = datetime.now().month
             current_year = datetime.now().year
             
             monthly_applications = 0
             for app in applications:
                 try:
-                    # Parse da data
                     applied_date = datetime.fromisoformat(app['applied_at'].replace('Z', '+00:00').replace('+00', ''))
                     if applied_date.month == current_month and applied_date.year == current_year:
                         monthly_applications += 1
                 except:
                     continue
             
-            print(f"   Candidaturas do mês: {monthly_applications}")
-            
-            # ✅ 4. TAXA DE CONVERSÃO (baseado em contratações - stage 9)
+            # ✅ 3. TAXA DE CONVERSÃO
             hired_count = len([app for app in applications if app.get('stage') == 9])
             conversion_rate = (hired_count / max(len(applications), 1)) * 100
-            print(f"   Contratados: {hired_count}/{len(applications)} = {conversion_rate:.1f}%")
             
-            # ✅ 5. ENTREVISTAS PENDENTES (stages 5-6)
+            # ✅ 4. ENTREVISTAS PENDENTES (etapas 5-6)
             pending_interviews = len([
                 app for app in applications 
-                if app.get('stage') in [5, 6]  # Entrevista RH e Técnica
+                if app.get('stage') in [5, 6]
             ])
-            print(f"   Entrevistas pendentes: {pending_interviews}")
+            
+            # ✅ 5. DISTRIBUIÇÃO POR STATUS
+            status_distribution = {}
+            for app in applications:
+                status = app.get('status', 'applied')
+                status_distribution[status] = status_distribution.get(status, 0) + 1
+            
+            # ✅ 6. DISTRIBUIÇÃO POR ETAPA
+            stage_distribution = {}
+            for app in applications:
+                stage = app.get('stage', 1)
+                stage_distribution[f'stage_{stage}'] = stage_distribution.get(f'stage_{stage}', 0) + 1
+            
+            # ✅ 7. TENDÊNCIA DOS ÚLTIMOS 6 MESES
+            monthly_trend = []
+            for i in range(6):
+                target_date = datetime.now() - timedelta(days=30 * i)
+                target_month = target_date.month
+                target_year = target_date.year
+                
+                count = 0
+                for app in applications:
+                    try:
+                        applied_date = datetime.fromisoformat(app['applied_at'].replace('Z', '+00:00').replace('+00', ''))
+                        if applied_date.month == target_month and applied_date.year == target_year:
+                            count += 1
+                    except:
+                        continue
+                
+                monthly_trend.append({
+                    'month': target_date.strftime('%b %Y'),
+                    'count': count
+                })
+            
+            monthly_trend.reverse()  # Ordem cronológica
+            
+            # ✅ 8. TOP VAGAS COM MAIS CANDIDATOS
+            job_applications = {}
+            jobs_data = {}
+            
+            # Buscar dados das vagas
+            try:
+                all_jobs_response = supabase.table('jobs').select('id, title, company').execute()
+                all_jobs = all_jobs_response.data if all_jobs_response.data else []
+                
+                for job in all_jobs:
+                    jobs_data[job['id']] = job
+            except Exception as e:
+                print(f"   ⚠️ Erro ao buscar vagas para ranking: {e}")
+                all_jobs = []
+            
+            # Contar candidaturas por vaga
+            for app in applications:
+                job_id = app.get('job_id')
+                if job_id:
+                    job_applications[job_id] = job_applications.get(job_id, 0) + 1
+            
+            # Top 5 vagas com mais candidatos
+            top_jobs = []
+            for job_id, count in sorted(job_applications.items(), key=lambda x: x[1], reverse=True)[:5]:
+                job_info = jobs_data.get(job_id, {})
+                top_jobs.append({
+                    'job_title': job_info.get('title', 'Vaga Desconhecida'),
+                    'company': job_info.get('company', 'Empresa'),
+                    'applications_count': count
+                })
+            
+            # ✅ 9. ATIVIDADES RECENTES (últimas 10 candidaturas)
+            recent_activities = []
+            sorted_applications = sorted(applications, key=lambda x: x.get('applied_at', ''), reverse=True)[:10]
+            
+            for app in sorted_applications:
+                # Buscar dados do candidato
+                candidate_data = None
+                if app.get('candidate_id'):
+                    try:
+                        candidate_resp = supabase.table('candidates').select('first_name, last_name, email').eq('id', app['candidate_id']).execute()
+                        if candidate_resp.data:
+                            candidate_data = candidate_resp.data[0]
+                    except:
+                        pass
+                
+                # Buscar dados da vaga
+                job_data = None
+                if app.get('job_id'):
+                    job_data = jobs_data.get(app['job_id'])
+                
+                recent_activities.append({
+                    'id': app.get('id'),
+                    'candidate_name': f"{candidate_data.get('first_name', '')} {candidate_data.get('last_name', '')}" if candidate_data else 'Candidato',
+                    'candidate_email': candidate_data.get('email', '') if candidate_data else '',
+                    'job_title': job_data.get('title', 'Vaga') if job_data else 'Vaga',
+                    'stage': app.get('stage', 1),
+                    'status': app.get('status', 'applied'),
+                    'applied_at': app.get('applied_at', '')
+                })
             
         except Exception as e:
             print(f"   ⚠️ Erro ao buscar candidaturas: {e}")
-            # Valores baseados na análise dos CSVs
-            monthly_applications = 39  # Total de candidaturas
-            conversion_rate = 10.3     # 4 contratados de 39 candidaturas
-            pending_interviews = 8     # 4 em cada etapa 5 e 6
+            # Valores de fallback
+            applications = []
+            monthly_applications = 0
+            hired_count = 0
+            conversion_rate = 0.0
+            pending_interviews = 0
+            status_distribution = {}
+            stage_distribution = {}
+            monthly_trend = []
+            top_jobs = []
+            recent_activities = []
         
-        # ✅ 6. MONTAR RESPOSTA COM DADOS REAIS
+        # ✅ 10. MÉTRICAS FINAIS
         metrics = {
+            # Métricas principais (cards)
             'total_candidates': total_candidates,
             'active_jobs': active_jobs,
             'monthly_applications': monthly_applications,
             'conversion_rate': round(conversion_rate, 1),
             'pending_interviews': pending_interviews,
-            'last_updated': datetime.now().isoformat()
+            'hired_count': hired_count,
+            
+            # Distribuições para gráficos
+            'status_distribution': status_distribution,
+            'stage_distribution': stage_distribution,
+            
+            # Tendências
+            'monthly_trend': monthly_trend,
+            
+            # Rankings
+            'top_jobs': top_jobs,
+            
+            # Atividades
+            'recent_activities': recent_activities,
+            
+            # Metadados
+            'last_updated': datetime.now().isoformat(),
+            'total_applications': len(applications)
         }
         
-        print(f"✅ Métricas calculadas: {metrics}")
+        print(f"✅ Métricas calculadas: {len(metrics)} campos")
         return jsonify(metrics)
         
     except Exception as e:
@@ -570,19 +683,100 @@ def get_dashboard_metrics():
         import traceback
         traceback.print_exc()
         
-        # ⚠️ FALLBACK: Retornar dados baseados na análise CSV
+        # ⚠️ FALLBACK: Dados de demonstração
         fallback_metrics = {
-            'total_candidates': 35,     # Conforme CSV
-            'active_jobs': 11,          # Conforme análise
-            'monthly_applications': 39, # Total de candidaturas
-            'conversion_rate': 10.3,    # 4 contratados / 39 candidaturas
-            'pending_interviews': 8,    # Etapas 5-6
+            'total_candidates': total_candidates if 'total_candidates' in locals() else 35,
+            'active_jobs': active_jobs if 'active_jobs' in locals() else 11, 
+            'monthly_applications': 8,
+            'conversion_rate': 10.3,
+            'pending_interviews': 6,
+            'hired_count': 4,
+            'status_distribution': {
+                'applied': 15,
+                'in_progress': 16,
+                'hired': 4
+            },
+            'stage_distribution': {
+                'stage_1': 8, 'stage_2': 6, 'stage_3': 5,
+                'stage_4': 4, 'stage_5': 3, 'stage_6': 3,
+                'stage_7': 2, 'stage_8': 2, 'stage_9': 4
+            },
+            'monthly_trend': [
+                {'month': 'Jan 2025', 'count': 5},
+                {'month': 'Feb 2025', 'count': 8},
+                {'month': 'Mar 2025', 'count': 12},
+                {'month': 'Apr 2025', 'count': 15},
+                {'month': 'May 2025', 'count': 10},
+                {'month': 'Jun 2025', 'count': 8}
+            ],
+            'top_jobs': [
+                {'job_title': 'Desenvolvedor React', 'company': 'TechCorp', 'applications_count': 12},
+                {'job_title': 'Designer UX/UI', 'company': 'StartupXYZ', 'applications_count': 8},
+                {'job_title': 'Product Manager', 'company': 'InnovaCorp', 'applications_count': 6}
+            ],
+            'recent_activities': [],
             'error': 'Usando dados de fallback',
-            'last_updated': datetime.now().isoformat()
+            'last_updated': datetime.now().isoformat(),
+            'total_applications': 39
         }
         
-        print(f"🆘 Retornando fallback: {fallback_metrics}")
-        return jsonify(fallback_metrics), 200  # Não quebrar o frontend
+        return jsonify(fallback_metrics), 200
+
+@api.route('/dashboard/charts/applications-trend', methods=['GET'])
+def get_applications_trend():
+    """Dados detalhados para gráfico de tendência de candidaturas"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        period = request.args.get('period', '6months')  # 6months, 1year, 3months
+        
+        if period == '6months':
+            months = 6
+        elif period == '1year':
+            months = 12
+        elif period == '3months':
+            months = 3
+        else:
+            months = 6
+        
+        applications_response = supabase.table('applications').select('applied_at').execute()
+        applications = applications_response.data if applications_response.data else []
+        
+        monthly_data = []
+        for i in range(months):
+            target_date = datetime.now() - timedelta(days=30 * i)
+            target_month = target_date.month
+            target_year = target_date.year
+            
+            count = 0
+            for app in applications:
+                try:
+                    applied_date = datetime.fromisoformat(app['applied_at'].replace('Z', '+00:00').replace('+00', ''))
+                    if applied_date.month == target_month and applied_date.year == target_year:
+                        count += 1
+                except:
+                    continue
+            
+            monthly_data.append({
+                'month': target_date.strftime('%b'),
+                'year': target_date.year,
+                'count': count,
+                'label': target_date.strftime('%b %Y')
+            })
+        
+        monthly_data.reverse()
+        
+        return jsonify({
+            'data': monthly_data,
+            'period': period,
+            'total_months': months
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+print("✅ Dashboard endpoints AVANÇADOS adicionados com sucesso!")
 
 
 # =============================================================================

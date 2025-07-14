@@ -1,9 +1,42 @@
-import { useState, useEffect } from 'react';
-import { Users, Briefcase, Calendar, TrendingUp, Clock, LucideIcon } from 'lucide-react';
+// 🎯 DASHBOARD PROFISSIONAL COMPLETO - SUBSTITUIÇÃO TOTAL
+// Arquivo: frontend/src/pages/DashboardPage.tsx
+
+import React, { useState, useEffect } from 'react';
+import {
+  Users,
+  Briefcase,
+  TrendingUp,
+  Target,
+  Calendar,
+  Clock,
+  Eye,
+  ArrowRight,
+  RefreshCw,
+  AlertCircle,
+  Award,
+  Activity,
+  FileText,
+  BarChart3
+} from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
 import axios from 'axios';
 
 // ============================================================================
-// INTERFACES E TIPOS
+// INTERFACES
 // ============================================================================
 
 interface DashboardMetrics {
@@ -12,129 +45,252 @@ interface DashboardMetrics {
   monthly_applications: number;
   conversion_rate: number;
   pending_interviews: number;
-  status_breakdown?: Record<string, number>;
-  last_updated?: string;
-}
-
-interface MetricsCardProps {
-  title: string;
-  value: number | string;
-  subtitle?: string;
-  icon: LucideIcon;
-  color: 'blue' | 'green' | 'purple' | 'orange' | 'red';
-  loading?: boolean;
+  hired_count: number;
+  status_distribution: Record<string, number>;
+  stage_distribution: Record<string, number>;
+  monthly_trend: Array<{
+    month: string;
+    count: number;
+  }>;
+  top_jobs: Array<{
+    job_title: string;
+    company: string;
+    applications_count: number;
+  }>;
+  recent_activities: Array<{
+    id: number;
+    candidate_name: string;
+    candidate_email: string;
+    job_title: string;
+    stage: number;
+    status: string;
+    applied_at: string;
+  }>;
+  last_updated: string;
+  total_applications: number;
 }
 
 // ============================================================================
-// COMPONENTE METRICS CARD
+// API CALLS
 // ============================================================================
 
-const colorClasses = {
-  blue: 'bg-blue-50 text-blue-600 border-blue-200',
-  green: 'bg-green-50 text-green-600 border-green-200',
-  purple: 'bg-purple-50 text-purple-600 border-purple-200',
-  orange: 'bg-orange-50 text-orange-600 border-orange-200',
-  red: 'bg-red-50 text-red-600 border-red-200',
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+const dashboardApi = {
+  getMetrics: async (): Promise<DashboardMetrics> => {
+    const response = await axios.get(`${API_BASE_URL}/dashboard/metrics`, {
+      timeout: 15000
+    });
+    return response.data;
+  }
 };
 
-function MetricsCard({
-  title,
-  value,
-  subtitle,
-  icon: Icon,
-  color,
-  loading = false,
-}: MetricsCardProps) {
-  return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
-          {loading ? (
-            <div className="animate-pulse">
-              <div className="h-8 bg-gray-200 rounded w-16 mb-1"></div>
-              <div className="h-4 bg-gray-200 rounded w-24"></div>
-            </div>
-          ) : (
-            <>
-              <p className="text-3xl font-bold text-gray-900 mb-1">{value}</p>
-              {subtitle && (
-                <p className="text-sm text-gray-500">{subtitle}</p>
-              )}
-            </>
-          )}
-        </div>
-        <div className={`p-3 rounded-lg border ${colorClasses[color]}`}>
-          <Icon className="h-6 w-6" />
-        </div>
-      </div>
-    </div>
-  );
+// ============================================================================
+// COMPONENTES
+// ============================================================================
+
+// Componente de Card de Métrica
+interface MetricCardProps {
+  title: string;
+  value: number | string;
+  icon: React.ReactNode;
+  color: string;
+  change?: string;
+  changeType?: 'positive' | 'negative' | 'neutral';
 }
 
+const MetricCard: React.FC<MetricCardProps> = ({ 
+  title, 
+  value, 
+  icon, 
+  color, 
+  change, 
+  changeType = 'neutral' 
+}) => (
+  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-sm font-medium text-gray-600">{title}</p>
+        <p className={`text-2xl font-bold ${color} mt-2`}>{value}</p>
+        {change && (
+          <p className={`text-sm mt-1 ${
+            changeType === 'positive' ? 'text-green-600' : 
+            changeType === 'negative' ? 'text-red-600' : 
+            'text-gray-600'
+          }`}>
+            {change}
+          </p>
+        )}
+      </div>
+      <div className={`${color.replace('text-', 'text-').replace('-900', '-600')} opacity-80`}>
+        {icon}
+      </div>
+    </div>
+  </div>
+);
+
 // ============================================================================
-// HOOK PARA MÉTRICAS
+// COMPONENTE PRINCIPAL
 // ============================================================================
 
-function useDashboard() {
+const DashboardPage: React.FC = () => {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
-  const fetchMetrics = async () => {
+  // Carregar métricas
+  const loadMetrics = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      // console.log('🔄 Buscando métricas do dashboard...');
-      setLoading(true);
-      setError(null);
-
-      const response = await axios.get(`${API_BASE_URL}/dashboard/metrics`, {
-        timeout: 10000,
-      });
-
-      // console.log('✅ Métricas recebidas:', response.data);
-      setMetrics(response.data);
+      console.log('📊 Carregando métricas do dashboard...');
+      const data = await dashboardApi.getMetrics();
+      setMetrics(data);
+      console.log('✅ Métricas carregadas:', data);
     } catch (err: any) {
-      console.error('❌ Erro ao buscar métricas:', err);
-      setError(err.response?.data?.error || err.message || 'Erro ao carregar métricas');
-      
-      // Fallback para dados básicos em caso de erro
-      setMetrics({
-        total_candidates: 0,
-        active_jobs: 0,
-        monthly_applications: 0,
-        conversion_rate: 0,
-        pending_interviews: 0,
-      });
+      console.error('❌ Erro ao carregar métricas:', err);
+      setError(err.response?.data?.error || err.message || 'Erro ao carregar dashboard');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchMetrics();
+    loadMetrics();
   }, []);
 
-  return {
-    metrics,
-    loading,
-    error,
-    refetch: fetchMetrics,
+  // Preparar dados para gráficos
+  const prepareChartData = () => {
+    if (!metrics) return { statusData: [], stageData: [], trendData: [] };
+
+    // Mapeamento dos nomes das etapas
+    const stageNames: Record<number, string> = {
+      1: 'Candidatura Recebida',
+      2: 'Triagem de Currículo', 
+      3: 'Validação Telefônica',
+      4: 'Teste Técnico',
+      5: 'Entrevista RH',
+      6: 'Entrevista Técnica',
+      7: 'Verificação de Referências',
+      8: 'Proposta Enviada',
+      9: 'Contratado'
+    };
+
+    // Dados para gráfico de status
+    const statusData = Object.entries(metrics.status_distribution).map(([status, count]) => ({
+      name: status === 'applied' ? 'Candidatura' : 
+            status === 'in_progress' ? 'Em Processo' : 
+            status === 'hired' ? 'Contratado' : 
+            status === 'rejected' ? 'Rejeitado' : status,
+      value: count,
+      color: status === 'applied' ? '#3b82f6' : 
+             status === 'in_progress' ? '#f59e0b' : 
+             status === 'hired' ? '#10b981' : 
+             status === 'rejected' ? '#ef4444' : '#6b7280'
+    }));
+
+    // Dados para gráfico de etapas com nomes reais
+    const stageData = Object.entries(metrics.stage_distribution).map(([stage, count]) => {
+      const stageNum = parseInt(stage.replace('stage_', ''));
+      return {
+        name: stageNames[stageNum] || `Etapa ${stageNum}`,
+        value: count,
+        stage: stageNum
+      };
+    }).sort((a, b) => a.stage - b.stage);
+
+    // Dados de tendência
+    const trendData = metrics.monthly_trend;
+
+    return { statusData, stageData, trendData };
   };
-}
 
-// ============================================================================
-// COMPONENTE PRINCIPAL DO DASHBOARD
-// ============================================================================
+  const { statusData, stageData, trendData } = prepareChartData();
 
-function Dashboard() {
-  const { metrics, loading, error, refetch } = useDashboard();
+  // Cores para gráfico de pizza
+  const COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4'];
 
-  const handleRefresh = () => {
-    // console.log('🔄 Atualizando métricas...');
-    refetch();
+  // Formatação de data
+  const formatDate = (dateString: string): string => {
+    try {
+      return new Date(dateString).toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    } catch {
+      return dateString;
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        {/* Header Skeleton */}
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="h-8 bg-gray-200 rounded w-64 mb-2 animate-pulse"></div>
+            <div className="h-4 bg-gray-200 rounded w-96 animate-pulse"></div>
+          </div>
+          <div className="h-10 bg-gray-200 rounded w-32 animate-pulse"></div>
+        </div>
+
+        {/* Cards Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="animate-pulse">
+                <div className="h-4 bg-gray-200 rounded w-32 mb-4"></div>
+                <div className="h-8 bg-gray-200 rounded w-16"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Charts Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {[1, 2].map(i => (
+            <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="h-6 bg-gray-200 rounded w-48 mb-4 animate-pulse"></div>
+              <div className="h-64 bg-gray-100 rounded animate-pulse"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <div className="flex items-center space-x-3">
+            <AlertCircle className="h-6 w-6 text-red-600" />
+            <div>
+              <h3 className="text-red-800 font-medium">Erro ao carregar dashboard</h3>
+              <p className="text-red-600 text-sm mt-1">{error}</p>
+            </div>
+          </div>
+          <button
+            onClick={loadMetrics}
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!metrics) {
+    return (
+      <div className="text-center py-12">
+        <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Dados não disponíveis</h3>
+        <p className="text-gray-600">Não foi possível carregar as métricas do dashboard.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -142,182 +298,261 @@ function Dashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600">Visão geral das atividades de recrutamento</p>
+          <p className="text-gray-600">Visão geral do sistema de recrutamento e métricas em tempo real</p>
         </div>
         <button
-          onClick={handleRefresh}
+          onClick={loadMetrics}
           disabled={loading}
           className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
         >
-          <TrendingUp className="h-4 w-4 mr-2" />
-          {loading ? 'Atualizando...' : 'Atualizar'}
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Atualizar
         </button>
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">Erro ao carregar métricas</h3>
-              <p className="text-sm text-red-700 mt-1">{error}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        <MetricsCard
+      {/* Cards de Métricas Principais */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard
           title="Total de Candidatos"
-          value={metrics?.total_candidates || 0}
-          subtitle="+8% esta semana"
-          icon={Users}
-          color="blue"
-          loading={loading}
+          value={metrics.total_candidates}
+          icon={<Users className="h-8 w-8" />}
+          color="text-blue-900"
+          change="Crescimento mensal"
+          changeType="positive"
         />
         
-        <MetricsCard
-          title="Vagas Abertas"
-          value={metrics?.active_jobs || 0}
-          subtitle="2 novas esta semana"
-          icon={Briefcase}
-          color="green"
-          loading={loading}
+        <MetricCard
+          title="Vagas Ativas"
+          value={metrics.active_jobs}
+          icon={<Briefcase className="h-8 w-8" />}
+          color="text-green-900"
+          change="Oportunidades abertas"
+          changeType="neutral"
         />
         
-        <MetricsCard
+        <MetricCard
           title="Candidaturas do Mês"
-          value={metrics?.monthly_applications || 0}
-          subtitle="Para esta semana"
-          icon={Calendar}
-          color="purple"
-          loading={loading}
+          value={metrics.monthly_applications}
+          icon={<TrendingUp className="h-8 w-8" />}
+          color="text-purple-900"
+          change="Este mês"
+          changeType="positive"
         />
         
-        <MetricsCard
-          title="Entrevistas Pendentes"
-          value={metrics?.pending_interviews || 0}
-          subtitle="Para esta semana"
-          icon={Clock}
-          color="orange"
-          loading={loading}
-        />
-        
-        <MetricsCard
+        <MetricCard
           title="Taxa de Conversão"
-          value={`${metrics?.conversion_rate || 0}%`}
-          subtitle="Candidatos → Contratações"
-          icon={TrendingUp}
-          color="red"
-          loading={loading}
+          value={`${metrics.conversion_rate}%`}
+          icon={<Target className="h-8 w-8" />}
+          color="text-orange-900"
+          change="Eficiência do processo"
+          changeType="positive"
         />
       </div>
 
-      {/* Debug Info - removido da produção */}
-      {false && import.meta.env.DEV && metrics && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm">
-          <h4 className="font-medium text-gray-900 mb-2">Debug Info:</h4>
-          <pre className="text-gray-600 overflow-auto text-xs">
-            {JSON.stringify(metrics, null, 2)}
-          </pre>
-        </div>
-      )}
+      {/* Cards Secundários */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <MetricCard
+          title="Contratados"
+          value={metrics.hired_count}
+          icon={<Award className="h-6 w-6" />}
+          color="text-green-700"
+        />
+        
+        <MetricCard
+          title="Entrevistas Pendentes"
+          value={metrics.pending_interviews}
+          icon={<Calendar className="h-6 w-6" />}
+          color="text-blue-700"
+        />
+        
+        <MetricCard
+          title="Total de Candidaturas"
+          value={metrics.total_applications}
+          icon={<FileText className="h-6 w-6" />}
+          color="text-gray-700"
+        />
+      </div>
 
-      {/* Recent Activity & Conversion Rate */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Atividades Recentes */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Atividades Recentes</h3>
-          <div className="space-y-3">
-            <div className="flex items-center space-x-3">
-              <div className="flex-shrink-0">
-                <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Users className="h-4 w-4 text-blue-600" />
-                </div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-900">
-                  Novo candidato cadastrado
-                </p>
-                <p className="text-xs text-gray-500">2 minutos atrás</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="flex-shrink-0">
-                <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
-                  <Calendar className="h-4 w-4 text-green-600" />
-                </div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-900">
-                  Entrevista agendada com João Silva
-                </p>
-                <p className="text-xs text-gray-500">1 hora atrás</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="flex-shrink-0">
-                <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center">
-                  <Briefcase className="h-4 w-4 text-purple-600" />
-                </div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-900">
-                  Nova vaga criada: Analista de Dados
-                </p>
-                <p className="text-xs text-gray-500">2 horas atrás</p>
-              </div>
-            </div>
+      {/* Gráficos */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* Gráfico de Tendência de Candidaturas */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 xl:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base xl:text-lg font-semibold text-gray-900">
+              Tendência de Candidaturas
+            </h3>
           </div>
+          <ResponsiveContainer width="100%" height={320}>
+            <LineChart data={trendData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="month" 
+                fontSize={12}
+                tick={{ fontSize: 12 }}
+                interval={0}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
+              <YAxis fontSize={12} />
+              <Tooltip />
+              <Line 
+                type="monotone" 
+                dataKey="count" 
+                stroke="#3b82f6" 
+                strokeWidth={2}
+                dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
 
-        {/* Taxa de Conversão */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Taxa de Conversão</h3>
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Candidatos → Entrevistas</span>
-                <span className="font-medium">32%</span>
-              </div>
-              <div className="mt-1 w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-blue-600 h-2 rounded-full transition-all duration-500" style={{ width: '32%' }}></div>
-              </div>
+        {/* Gráfico de Status dos Candidatos */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 xl:p-6">
+          <h3 className="text-base xl:text-lg font-semibold text-gray-900 mb-4">
+            Distribuição por Status
+          </h3>
+          <ResponsiveContainer width="100%" height={320}>
+            <PieChart>
+              <Pie
+                data={statusData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={false}
+                outerRadius={90}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {statusData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value, name) => [`${value} candidatos`, name]} />
+              <Legend 
+                wrapperStyle={{ fontSize: '12px' }}
+                formatter={(value, entry) => `${value}: ${entry?.payload?.value ?? ''}`}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Gráfico de Etapas do Pipeline */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 xl:p-6">
+        <h3 className="text-base xl:text-lg font-semibold text-gray-900 mb-4">
+          Candidatos por Etapa do Pipeline
+        </h3>
+        <div className="overflow-x-auto">
+          <ResponsiveContainer width="100%" height={380} minWidth={800}>
+            <BarChart 
+              data={stageData}
+              margin={{ top: 20, right: 30, left: 20, bottom: 100 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="name" 
+                fontSize={11}
+                tick={{ fontSize: 11 }}
+                interval={0}
+                angle={-45}
+                textAnchor="end"
+                height={120}
+              />
+              <YAxis fontSize={12} />
+              <Tooltip 
+                formatter={(value) => [`${value} candidatos`, 'Quantidade']}
+                labelFormatter={(label) => `Etapa: ${label}`}
+              />
+              <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Seções Lado a Lado */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* Top Vagas */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 xl:p-6">
+          <h3 className="text-base xl:text-lg font-semibold text-gray-900 mb-4">
+            Top Vagas com Mais Candidatos
+          </h3>
+          {metrics.top_jobs && metrics.top_jobs.length > 0 ? (
+            <div className="space-y-3 max-h-80 overflow-y-auto">
+              {metrics.top_jobs.map((job, index) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-medium text-gray-900 text-sm truncate">{job.job_title}</h4>
+                    <p className="text-xs text-gray-600 truncate">{job.company}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0 ml-4">
+                    <span className="font-bold text-blue-600 text-lg">{job.applications_count}</span>
+                    <p className="text-xs text-gray-500">candidatos</p>
+                  </div>
+                </div>
+              ))}
             </div>
-            
-            <div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Entrevistas → Contratações</span>
-                <span className="font-medium">28%</span>
-              </div>
-              <div className="mt-1 w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-green-600 h-2 rounded-full transition-all duration-500" style={{ width: '28%' }}></div>
-              </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <BarChart3 className="h-8 w-8 mx-auto mb-2" />
+              <p>Nenhuma vaga com candidatos ainda</p>
             </div>
-            
-            <div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600 font-medium">Taxa Global</span>
-                <span className="font-medium text-lg">{metrics?.conversion_rate || 0}%</span>
-              </div>
-              <div className="mt-1 w-full bg-gray-200 rounded-full h-3">
-                <div 
-                  className="bg-purple-600 h-3 rounded-full transition-all duration-500" 
-                  style={{ width: `${Math.min(metrics?.conversion_rate || 0, 100)}%` }}
-                ></div>
-              </div>
+          )}
+        </div>
+
+        {/* Atividades Recentes */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 xl:p-6">
+          <h3 className="text-base xl:text-lg font-semibold text-gray-900 mb-4">
+            Candidaturas Recentes
+          </h3>
+          {metrics.recent_activities && metrics.recent_activities.length > 0 ? (
+            <div className="space-y-3 max-h-80 overflow-y-auto">
+              {metrics.recent_activities.slice(0, 8).map((activity) => (
+                <div key={activity.id} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-medium text-gray-900 text-sm truncate">
+                      {activity.candidate_name}
+                    </h4>
+                    <p className="text-xs text-gray-600 truncate">{activity.job_title}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Etapa {activity.stage} • {formatDate(activity.applied_at)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => console.log('Ver candidato', activity.id)}
+                    className="p-1 text-blue-600 hover:text-blue-800 flex-shrink-0"
+                    title="Ver detalhes"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
             </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <Activity className="h-8 w-8 mx-auto mb-2" />
+              <p>Nenhuma atividade recente</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Footer com Informações */}
+      <div className="bg-gray-50 rounded-lg p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-600 space-y-2 sm:space-y-0">
+          <div className="flex items-center space-x-2">
+            <Clock className="h-4 w-4" />
+            <span>Última atualização: {formatDate(metrics.last_updated)}</span>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-1 sm:space-y-0">
+            <span>Total de {metrics.total_applications} candidaturas processadas</span>
+            <span className="hidden sm:inline">•</span>
+            <span>{metrics.active_jobs} vagas ativas</span>
           </div>
         </div>
       </div>
     </div>
   );
-}
+};
 
-export default Dashboard;
+export default DashboardPage;
