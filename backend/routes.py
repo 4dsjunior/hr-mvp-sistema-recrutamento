@@ -1230,7 +1230,8 @@ def move_application_stage(application_id):
     try:
         data = request.get_json()
         action = data.get('action', 'next')  # 'next', 'previous', 'specific'
-        target_stage = data.get('target_stage', type=int)
+        target_stage_raw = data.get('target_stage')
+        target_stage = int(target_stage_raw) if target_stage_raw is not None else None
         notes = data.get('notes', '')
         
         # Buscar candidatura atual
@@ -1519,7 +1520,8 @@ def batch_move_applications():
     try:
         data = request.get_json()
         application_ids = data.get('application_ids', [])
-        target_stage = data.get('target_stage', type=int)
+        target_stage_raw = data.get('target_stage')
+        target_stage = int(target_stage_raw) if target_stage_raw is not None else None
         notes = data.get('notes', '')
         
         if not application_ids:
