@@ -1,4 +1,4 @@
-// 🎯 DASHBOARD PROFISSIONAL COMPLETO - SUBSTITUIÇÃO TOTAL
+// 🎯 DASHBOARD PROFISSIONAL COMPLETO - VERSÃO LIMPA
 // Arquivo: frontend/src/pages/DashboardPage.tsx
 
 import React, { useState, useEffect } from 'react';
@@ -10,7 +10,6 @@ import {
   Calendar,
   Clock,
   Eye,
-  ArrowRight,
   RefreshCw,
   AlertCircle,
   Award,
@@ -34,6 +33,10 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import axios from 'axios';
+
+// 🚀 IMPORTAÇÕES DOS COMPONENTES AVANÇADOS
+import AutoRefresh from '../components/Dashboard/AutoRefresh';
+import PeriodFilter from '../components/Dashboard/PeriodFilter';
 
 // ============================================================================
 // INTERFACES
@@ -89,7 +92,6 @@ const dashboardApi = {
 // COMPONENTES
 // ============================================================================
 
-// Componente de Card de Métrica
 interface MetricCardProps {
   title: string;
   value: number | string;
@@ -138,14 +140,52 @@ const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Carregar métricas
-  const loadMetrics = async () => {
+  // 🚀 ESTADOS PARA FUNCIONALIDADES AVANÇADAS
+  const [autoRefresh, setAutoRefresh] = useState({
+    enabled: false,
+    interval: 60000,
+    nextRefreshIn: 0
+  });
+  
+  const [periodFilter, setPeriodFilter] = useState<{
+    value: string;
+    customRange?: { start: string; end: string };
+  }>({
+    value: '30d'
+  });
+
+  const [metricsCache, setMetricsCache] = useState<{
+    data: DashboardMetrics | null;
+    timestamp: number;
+  }>({ data: null, timestamp: 0 });
+
+  const CACHE_DURATION = 5 * 60 * 1000;
+
+  // 🔄 FUNÇÃO DE CARREGAMENTO
+  const loadMetrics = async (forceRefresh = false) => {
+    if (!forceRefresh && metricsCache.data) {
+      const now = Date.now();
+      if (now - metricsCache.timestamp < CACHE_DURATION) {
+        console.log('📦 Usando dados do cache');
+        setMetrics(metricsCache.data);
+        setLoading(false);
+        return;
+      }
+    }
+
     setLoading(true);
     setError(null);
+    
     try {
       console.log('📊 Carregando métricas do dashboard...');
       const data = await dashboardApi.getMetrics();
       setMetrics(data);
+      
+      setMetricsCache({
+        data,
+        timestamp: Date.now()
+      });
+      
       console.log('✅ Métricas carregadas:', data);
     } catch (err: any) {
       console.error('❌ Erro ao carregar métricas:', err);
@@ -155,15 +195,31 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  // 🔄 AUTO-REFRESH
+  useEffect(() => {
+    if (!autoRefresh.enabled || autoRefresh.interval === 0) return;
+
+    const interval = setInterval(() => {
+      loadMetrics(true);
+    }, autoRefresh.interval);
+
+    return () => clearInterval(interval);
+  }, [autoRefresh.enabled, autoRefresh.interval]);
+
+  // 🎯 CARREGAMENTO INICIAL
   useEffect(() => {
     loadMetrics();
   }, []);
+
+  // 🔄 FUNÇÕES PARA COMPONENTES
+  const handlePeriodChange = (period: string, customRange?: { start: string; end: string }) => {
+    setPeriodFilter({ value: period, customRange });
+  };
 
   // Preparar dados para gráficos
   const prepareChartData = () => {
     if (!metrics) return { statusData: [], stageData: [], trendData: [] };
 
-    // Mapeamento dos nomes das etapas
     const stageNames: Record<number, string> = {
       1: 'Candidatura Recebida',
       2: 'Triagem de Currículo', 
@@ -176,7 +232,6 @@ const DashboardPage: React.FC = () => {
       9: 'Contratado'
     };
 
-    // Dados para gráfico de status
     const statusData = Object.entries(metrics.status_distribution).map(([status, count]) => ({
       name: status === 'applied' ? 'Candidatura' : 
             status === 'in_progress' ? 'Em Processo' : 
@@ -189,7 +244,6 @@ const DashboardPage: React.FC = () => {
              status === 'rejected' ? '#ef4444' : '#6b7280'
     }));
 
-    // Dados para gráfico de etapas com nomes reais
     const stageData = Object.entries(metrics.stage_distribution).map(([stage, count]) => {
       const stageNum = parseInt(stage.replace('stage_', ''));
       return {
@@ -199,18 +253,14 @@ const DashboardPage: React.FC = () => {
       };
     }).sort((a, b) => a.stage - b.stage);
 
-    // Dados de tendência
     const trendData = metrics.monthly_trend;
 
     return { statusData, stageData, trendData };
   };
 
   const { statusData, stageData, trendData } = prepareChartData();
-
-  // Cores para gráfico de pizza
   const COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4'];
 
-  // Formatação de data
   const formatDate = (dateString: string): string => {
     try {
       return new Date(dateString).toLocaleDateString('pt-BR', {
@@ -226,7 +276,6 @@ const DashboardPage: React.FC = () => {
   if (loading) {
     return (
       <div className="space-y-6">
-        {/* Header Skeleton */}
         <div className="flex items-center justify-between">
           <div>
             <div className="h-8 bg-gray-200 rounded w-64 mb-2 animate-pulse"></div>
@@ -235,7 +284,6 @@ const DashboardPage: React.FC = () => {
           <div className="h-10 bg-gray-200 rounded w-32 animate-pulse"></div>
         </div>
 
-        {/* Cards Skeleton */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map(i => (
             <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -247,7 +295,6 @@ const DashboardPage: React.FC = () => {
           ))}
         </div>
 
-        {/* Charts Skeleton */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {[1, 2].map(i => (
             <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -272,7 +319,7 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
           <button
-            onClick={loadMetrics}
+            onClick={() => loadMetrics(true)}
             className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
           >
             Tentar novamente
@@ -294,23 +341,54 @@ const DashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Header Avançado */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600">Visão geral do sistema de recrutamento e métricas em tempo real</p>
         </div>
-        <button
-          onClick={loadMetrics}
-          disabled={loading}
-          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Atualizar
-        </button>
+        
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+          <PeriodFilter
+            value={periodFilter.value}
+            onChange={handlePeriodChange}
+            className="w-full sm:w-auto"
+          />
+          
+          <AutoRefresh
+            onRefresh={() => loadMetrics(true)}
+            loading={loading}
+            className="w-full sm:w-auto"
+          />
+        </div>
       </div>
 
-      {/* Cards de Métricas Principais */}
+      {/* Status */}
+      <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center space-x-4 text-gray-500">
+          <div className="flex items-center space-x-1">
+            <div className={`w-2 h-2 rounded-full ${
+              Date.now() - metricsCache.timestamp < CACHE_DURATION ? 'bg-green-400' : 'bg-yellow-400'
+            }`} />
+            <span>
+              {Date.now() - metricsCache.timestamp < CACHE_DURATION ? 'Cache ativo' : 'Cache expirado'}
+            </span>
+          </div>
+          
+          {metrics?.last_updated && (
+            <div className="flex items-center space-x-1">
+              <Clock className="h-4 w-4" />
+              <span>Última atualização: {formatDate(metrics.last_updated)}</span>
+            </div>
+          )}
+        </div>
+        
+        <div className="text-xs text-gray-400">
+          Período: Últimos {periodFilter.value.replace('d', ' dias')}
+        </div>
+      </div>
+
+      {/* Cards Principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="Total de Candidatos"
@@ -375,7 +453,7 @@ const DashboardPage: React.FC = () => {
 
       {/* Gráficos */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Gráfico de Tendência de Candidaturas */}
+        {/* Gráfico de Tendência */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 xl:p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base xl:text-lg font-semibold text-gray-900">
@@ -407,7 +485,7 @@ const DashboardPage: React.FC = () => {
           </ResponsiveContainer>
         </div>
 
-        {/* Gráfico de Status dos Candidatos */}
+        {/* Gráfico de Status */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 xl:p-6">
           <h3 className="text-base xl:text-lg font-semibold text-gray-900 mb-4">
             Distribuição por Status
@@ -431,14 +509,14 @@ const DashboardPage: React.FC = () => {
               <Tooltip formatter={(value, name) => [`${value} candidatos`, name]} />
               <Legend 
                 wrapperStyle={{ fontSize: '12px' }}
-                formatter={(value, entry) => `${value}: ${entry?.payload?.value ?? ''}`}
+                formatter={(value) => value}
               />
             </PieChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Gráfico de Etapas do Pipeline */}
+      {/* Gráfico Pipeline */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 xl:p-6">
         <h3 className="text-base xl:text-lg font-semibold text-gray-900 mb-4">
           Candidatos por Etapa do Pipeline
@@ -537,7 +615,7 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Footer com Informações */}
+      {/* Footer */}
       <div className="bg-gray-50 rounded-lg p-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-600 space-y-2 sm:space-y-0">
           <div className="flex items-center space-x-2">
