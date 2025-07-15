@@ -32,11 +32,12 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-import axios from 'axios';
-
 // 🚀 IMPORTAÇÕES DOS COMPONENTES AVANÇADOS
 import AutoRefresh from '../components/Dashboard/AutoRefresh';
 import PeriodFilter from '../components/Dashboard/PeriodFilter';
+
+// ✅ CORREÇÃO: Usar API centralizada com interceptors
+import api from '../lib/api';
 
 // ============================================================================
 // INTERFACES
@@ -77,13 +78,9 @@ interface DashboardMetrics {
 // API CALLS
 // ============================================================================
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
 const dashboardApi = {
   getMetrics: async (): Promise<DashboardMetrics> => {
-    const response = await axios.get(`${API_BASE_URL}/dashboard/metrics`, {
-      timeout: 15000
-    });
+    const response = await api.get('/api/dashboard/metrics');
     return response.data;
   }
 };

@@ -17,7 +17,9 @@ import {
   AlertCircle,
   Briefcase
 } from 'lucide-react';
-import axios from 'axios';
+
+// ✅ CORREÇÃO: Usar API centralizada com interceptors
+import api from '../lib/api';
 
 // ============================================================================
 // INTERFACES E TIPOS
@@ -81,8 +83,6 @@ interface PipelineStats {
 // API CALLS
 // ============================================================================
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
 const pipelineApi = {
   // ✅ Buscar pipeline completo do Supabase
   getPipeline: async (jobId?: number): Promise<{ stages: RecruitmentStage[], applications: Application[] }> => {
@@ -90,21 +90,17 @@ const pipelineApi = {
       console.log('🔍 Buscando pipeline completo do Supabase...');
       
       // 1. Buscar etapas de recrutamento
-      const stagesResponse = await axios.get(`${API_BASE_URL}/recruitment-stages`, {
-        timeout: 10000
-      });
+      const stagesResponse = await api.get('/api/recruitment-stages');
       const stages = stagesResponse.data.stages || [];
       console.log('📊 Etapas carregadas:', stages.length);
       
       // 2. Buscar candidaturas com dados relacionados
-      let applicationsUrl = `${API_BASE_URL}/applications`;
+      let applicationsUrl = '/api/applications';
       if (jobId) {
         applicationsUrl += `?job_id=${jobId}`;
       }
       
-      const applicationsResponse = await axios.get(applicationsUrl, {
-        timeout: 15000
-      });
+      const applicationsResponse = await api.get(applicationsUrl);
       const applications = applicationsResponse.data.applications || [];
       console.log('🔄 Candidaturas carregadas:', applications.length);
       
@@ -127,7 +123,7 @@ const pipelineApi = {
   getStats: async (jobId?: number): Promise<PipelineStats | null> => {
     try {
       const params = jobId ? `?job_id=${jobId}` : '';
-      const response = await axios.get(`${API_BASE_URL}/pipeline/stats${params}`);
+      const response = await api.get(`/api/pipeline/stats${params}`);
       return response.data;
     } catch (error: any) {
       console.error('❌ Erro ao carregar estatísticas:', error);
@@ -138,7 +134,7 @@ const pipelineApi = {
   // Mover candidato entre etapas
   moveCandidate: async (applicationId: number, action: 'next' | 'previous', notes?: string): Promise<void> => {
     try {
-      const response = await axios.put(`${API_BASE_URL}/applications/${applicationId}/stage`, {
+      const response = await api.put(`/api/applications/${applicationId}/stage`, {
         action,
         notes
       });
@@ -152,7 +148,7 @@ const pipelineApi = {
   // Buscar vagas para filtro
   getJobs: async (): Promise<Job[]> => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/jobs?per_page=50`);
+      const response = await api.get('/api/jobs?per_page=50');
       return response.data.jobs || [];
     } catch (error: any) {
       console.error('❌ Erro ao carregar vagas:', error);

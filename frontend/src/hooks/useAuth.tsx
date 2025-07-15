@@ -11,7 +11,9 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, fullName: string) => Promise<void>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -116,6 +118,90 @@ export const useAuth = (): AuthContextType => {
     }
   };
 
+  const signUp = async (email: string, password: string, fullName: string): Promise<void> => {
+    try {
+      setLoading(true);
+      console.log('👤 Tentando registrar usuário:', email);
+
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password: password,
+        options: {
+          data: {
+            full_name: fullName.trim(),
+          }
+        }
+      });
+
+      if (error) {
+        console.error('❌ Erro no registro:', error);
+        
+        if (error.message.includes('User already registered')) {
+          throw new Error('Email já está em uso');
+        } else if (error.message.includes('Password should be at least 6 characters')) {
+          throw new Error('A senha deve ter pelo menos 6 caracteres');
+        } else if (error.message.includes('Unable to validate email address')) {
+          throw new Error('Email inválido');
+        } else {
+          throw new Error(error.message);
+        }
+      }
+
+      if (!data.user) {
+        throw new Error('Erro inesperado no registro');
+      }
+
+      console.log('✅ Usuário registrado com sucesso:', data.user.email);
+      
+      // Verificar se precisa de confirmação de email
+      if (data.user && !data.session) {
+        toast.success('Conta criada! Verifique seu email para ativá-la.');
+      } else {
+        toast.success('Conta criada com sucesso!');
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Erro no signUp:', error);
+      toast.error(error.message || 'Erro ao criar conta');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetPassword = async (email: string): Promise<void> => {
+    try {
+      setLoading(true);
+      console.log('🔄 Iniciando reset de senha para:', email);
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        console.error('❌ Erro no reset de senha:', error);
+        
+        if (error.message.includes('Unable to validate email address')) {
+          throw new Error('Email inválido');
+        } else if (error.message.includes('Email not found')) {
+          throw new Error('Email não encontrado');
+        } else {
+          throw new Error(error.message);
+        }
+      }
+
+      console.log('✅ Email de reset enviado com sucesso');
+      toast.success('Email de recuperação enviado! Verifique sua caixa de entrada.');
+      
+    } catch (error: any) {
+      console.error('❌ Erro no resetPassword:', error);
+      toast.error(error.message || 'Erro ao enviar email de recuperação');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const signOut = async (): Promise<void> => {
     try {
       setLoading(true);
@@ -153,7 +239,9 @@ export const useAuth = (): AuthContextType => {
     session,
     loading,
     signIn,
+    signUp,
     signOut,
+    resetPassword,
     isAuthenticated
   };
 };

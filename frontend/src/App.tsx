@@ -8,42 +8,33 @@ import { Toaster } from 'react-hot-toast';
 // Layout
 import Layout from './components/Layout/Layout';
 
+// Components
+import ProtectedRoute from './components/Auth/ProtectedRoute';
+import ErrorBoundary from './components/UI/ErrorBoundary';
+
 // Pages
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import CandidatesPage from './pages/CandidatesPage';
 import JobsPage from './pages/JobsPage';
 import PipelinePage from './pages/PipelinePage';
 import ReportsPage from './pages/ReportsPage';
 
-// Hooks
-import { useAuth } from './hooks/useAuth';
-
-// Componente de rota protegida
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading } = useAuth();
-  
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600 font-medium">Carregando sistema...</p>
-        </div>
-      </div>
-    );
-  }
-  
-  return user ? <>{children}</> : <Navigate to="/login" replace />;
-};
+// Hooks - não precisamos mais do useAuthContext aqui
+// import { useAuthContext } from './hooks/useAuth';
 
 function App() {
   return (
-    <Router>
-      <div className="App">
+    <ErrorBoundary>
+      <Router>
+        <div className="App">
         <Routes>
-          {/* Rota pública - Login */}
+          {/* Rotas públicas - Login, Registro e Recuperação */}
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           
           {/* Rotas protegidas - Layout com Outlet */}
           <Route path="/" element={
@@ -96,8 +87,9 @@ function App() {
             },
           }}
         />
-      </div>
-    </Router>
+        </div>
+      </Router>
+    </ErrorBoundary>
   );
 }
 

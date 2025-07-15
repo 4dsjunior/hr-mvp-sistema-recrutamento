@@ -1,5 +1,6 @@
-// 🔐 CONTEXT DE AUTENTICAÇÃO
-// Arquivo: frontend/src/contexts/AuthContext.tsx
+// 🔐 BACKUP: AuthContext.tsx - Sistema Backend Custom (PRESERVADO)
+// Arquivo: frontend/src/contexts/AuthContext.backup.tsx
+// NOTA: Este arquivo foi mantido como backup das funcionalidades de roles e backend
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import axios from 'axios';

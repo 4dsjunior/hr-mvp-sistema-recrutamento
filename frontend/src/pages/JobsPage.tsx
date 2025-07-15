@@ -19,8 +19,10 @@ import {
   RefreshCw,
   AlertCircle
 } from 'lucide-react';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+
+// ✅ CORREÇÃO: Usar API centralizada com interceptors
+import api from '../lib/api';
 
 // ============================================================================
 // INTERFACES E TIPOS
@@ -58,16 +60,12 @@ interface JobsResponse {
 // API CALLS
 // ============================================================================
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
 const jobsApi = {
   // ✅ Buscar TODAS as vagas do Supabase
   getAll: async (): Promise<JobsResponse> => {
     try {
       console.log('🔍 Buscando TODAS as vagas do Supabase...');
-      const response = await axios.get(`${API_BASE_URL}/jobs?per_page=50`, {
-        timeout: 10000
-      });
+      const response = await api.get('/api/jobs?per_page=50');
       console.log('✅ Resposta da API de vagas:', response.data);
       return response.data;
     } catch (error: any) {
@@ -80,7 +78,7 @@ const jobsApi = {
   getCandidates: async (jobId: number): Promise<any> => {
     try {
       console.log(`🔍 Buscando candidatos da vaga ${jobId}...`);
-      const response = await axios.get(`${API_BASE_URL}/applications?job_id=${jobId}`);
+      const response = await api.get(`/api/applications?job_id=${jobId}`);
       console.log('✅ Candidatos encontrados:', response.data);
       return response.data;
     } catch (error: any) {

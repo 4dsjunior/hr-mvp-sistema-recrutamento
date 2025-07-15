@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+// ✅ CORREÇÃO: Usar API centralizada com interceptors
+import api from '../lib/api';
 
 interface DashboardMetrics {
   total_candidates: number;
@@ -10,8 +11,6 @@ interface DashboardMetrics {
   status_breakdown?: Record<string, number>;
   last_updated?: string;
 }
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export const useDashboard = () => {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
@@ -24,9 +23,7 @@ export const useDashboard = () => {
       setLoading(true);
       setError(null);
 
-      const response = await axios.get(`${API_BASE_URL}/dashboard/metrics`, {
-        timeout: 10000,
-      });
+      const response = await api.get('/api/dashboard/metrics');
 
       console.log('✅ Métricas recebidas:', response.data);
       setMetrics(response.data);
