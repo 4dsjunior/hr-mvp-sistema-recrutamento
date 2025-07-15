@@ -1,12 +1,15 @@
 # 🚨 CORREÇÃO APENAS DE SINTAXE - MANTÉM TODA FUNCIONALIDADE
 # Arquivo: backend/routes.py (substituir todo o conteúdo)
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 from supabase import create_client, Client
 import os
 from datetime import datetime, timedelta
 from decimal import Decimal
 import json
+from functools import wraps
+import jwt
+
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -26,6 +29,138 @@ try:
 except Exception as e:
     print(f"❌ Erro ao conectar Supabase: {e}")
     supabase = None
+
+# =============================================================================
+# MIDDLEWARE DE AUTENTICAÇÃO - MOVER PARA O INÍCIO
+# =============================================================================
+
+def verify_token(f):
+    """
+    Middleware para verificar token de autenticação em todas as rotas protegidas
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        print(f"🔒 Verificando autenticação para: {request.endpoint}")
+        
+        # Verificar se há token no header
+        token = request.headers.get('Authorization')
+        if not token:
+            print("❌ Token não fornecido")
+            return jsonify({'error': 'Token de autenticação não fornecido'}), 401
+        
+        try:
+            # Remover "Bearer " do início do token
+            if token.startswith('Bearer '):
+                token = token.replace('Bearer ', '', 1)
+            
+            print(f"🔍 Validando token: {token[:20]}...")
+            
+            # Verificar token com Supabase
+            user_response = supabase.auth.get_user(token)
+            
+            if not user_response.user:
+                print("❌ Token inválido - usuário não encontrado")
+                return jsonify({'error': 'Token inválido'}), 401
+            
+            # Armazenar dados do usuário na requisição
+            g.current_user = user_response.user
+            g.access_token = token
+            
+            # Log de auditoria
+            audit_log_action(
+                user_id=g.current_user.id,
+                action=f"ACESSOU_{request.method}",
+                resource=request.endpoint,
+                details=f"Endpoint: {request.path}"
+            )
+            
+            print(f"✅ Usuário autenticado: {g.current_user.email}")
+            
+            return f(*args, **kwargs)
+            
+        except Exception as e:
+            print(f"❌ Erro na validação do token: {e}")
+            return jsonify({'error': 'Token inválido ou expirado'}), 401
+    
+    return decorated_function
+
+def verify_role(required_roles):
+    """
+    Decorator para verificar roles específicos
+    @verify_role(['admin', 'manager'])
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not hasattr(g, 'current_user'):
+                return jsonify({'error': 'Usuário não autenticado'}), 401
+            
+            # Buscar role do usuário
+            user_role = get_user_role(g.current_user.id)
+            
+            if user_role not in required_roles:
+                print(f"❌ Acesso negado: role '{user_role}' não autorizada")
+                return jsonify({'error': 'Acesso negado - permissão insuficiente'}), 403
+            
+            print(f"✅ Acesso autorizado: role '{user_role}'")
+            return f(*args, **kwargs)
+        
+        return decorated_function
+    return decorator
+
+def get_user_role(user_id):
+    """Obter role do usuário"""
+    try:
+        response = supabase.table('profiles').select('role').eq('user_id', user_id).execute()
+        if response.data:
+            return response.data[0].get('role', 'user')
+        return 'user'  # Role padrão
+    except Exception as e:
+        print(f"❌ Erro ao buscar role: {e}")
+        return 'user'
+
+def create_user_profile(user_id, full_name, role='user'):
+    """Criar perfil do usuário após registro"""
+    try:
+        profile_data = {
+            'user_id': user_id,
+            'full_name': full_name,
+            'role': role,
+            'created_at': datetime.now().isoformat()
+        }
+        
+        response = supabase.table('profiles').insert(profile_data).execute()
+        print(f"✅ Perfil criado: {full_name} - Role: {role}")
+        return response.data[0] if response.data else None
+        
+    except Exception as e:
+        print(f"❌ Erro ao criar perfil: {e}")
+        return None
+
+def audit_log_action(user_id, action, resource, details=None):
+    """Registrar ação de auditoria"""
+    try:
+        audit_data = {
+            'user_id': user_id,
+            'action': action,
+            'resource': resource,
+            'details': details,
+            'ip_address': request.remote_addr,
+            'user_agent': request.headers.get('User-Agent', ''),
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # Tentar inserir na tabela de auditoria
+        response = supabase.table('audit_logs').insert(audit_data).execute()
+        print(f"📋 Auditoria registrada: {action} em {resource}")
+        
+    except Exception as e:
+        # Auditoria não deve quebrar a aplicação
+        print(f"⚠️ Erro no log de auditoria: {e}")
+
+# =============================================================================
+# ROTAS PÚBLICAS (SEM PROTEÇÃO)
+# =============================================================================
 
 @api.route('/test', methods=['GET'])
 def test_connection():
@@ -52,6 +187,33 @@ def test_connection():
             'database': 'error',
             'error': str(e)
         }), 200
+
+@api.route('/health', methods=['GET'])
+def health_check():
+    """Verificação de saúde da API"""
+    try:
+        status = {
+            'api': 'ok',
+            'database': 'disconnected',
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        if supabase:
+            # Usar busca robusta para teste
+            candidates = robust_search_all_candidates()
+            status['database'] = 'connected'
+            status['candidates_count'] = len(candidates)
+            status['strategy'] = 'robust'
+        
+        return jsonify(status)
+        
+    except Exception as e:
+        return jsonify({
+            'api': 'ok',
+            'database': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
 
 # =============================================================================
 # HELPER FUNCTIONS - ESTRATÉGIAS ROBUSTAS
@@ -115,10 +277,11 @@ def robust_execute_operation(operation_name, operation_func, search_func, *args,
         return None
 
 # =============================================================================
-# CANDIDATES ENDPOINTS
+# CANDIDATES ENDPOINTS - 🔒 PROTEGIDOS
 # =============================================================================
 
 @api.route('/candidates', methods=['GET'])
+@verify_token
 def get_candidates():
     """Listar todos os candidatos com suporte a filtros básicos"""
     try:
@@ -170,6 +333,7 @@ def get_candidates():
         return jsonify({'error': str(e)}), 500
 
 @api.route('/candidates', methods=['POST'])
+@verify_token
 def create_candidate():
     """Criar novo candidato - ESTRATÉGIA ROBUSTA"""
     try:
@@ -289,6 +453,7 @@ def create_candidate():
         return jsonify({'error': str(e)}), 500
 
 @api.route('/candidates/<int:candidate_id>', methods=['GET'])
+@verify_token
 def get_candidate_by_id(candidate_id):
     """Buscar candidato específico por ID"""
     try:
@@ -314,6 +479,7 @@ def get_candidate_by_id(candidate_id):
         return jsonify({'error': str(e)}), 500
 
 @api.route('/candidates/<int:candidate_id>', methods=['PUT'])
+@verify_token
 def update_candidate(candidate_id):
     """Atualizar candidato"""
     try:
@@ -385,8 +551,10 @@ def update_candidate(candidate_id):
         return jsonify({'error': str(e)}), 500
 
 @api.route('/candidates/<int:candidate_id>', methods=['DELETE'])
+@verify_token
+@verify_role(['admin', 'manager'])
 def delete_candidate(candidate_id):
-    """Deletar candidato"""
+    """Deletar candidato - APENAS ADMIN E MANAGER"""
     try:
         if not supabase:
             return jsonify({'error': 'Database not connected'}), 500
@@ -430,6 +598,7 @@ def delete_candidate(candidate_id):
         return jsonify({'error': str(e)}), 500
 
 @api.route('/candidates/search', methods=['GET'])
+@verify_token
 def search_candidates():
     """Buscar candidatos com filtros avançados"""
     try:
@@ -482,10 +651,11 @@ def search_candidates():
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
-# JOBS ENDPOINTS
+# JOBS ENDPOINTS - 🔒 PROTEGIDOS
 # =============================================================================
 
 @api.route('/jobs', methods=['GET'])
+@verify_token
 def get_jobs():
     """Listar TODAS as vagas do Supabase com filtros opcionais"""
     try:
@@ -619,6 +789,7 @@ def get_jobs():
         return jsonify({'error': str(e)}), 500
 
 @api.route('/jobs/<int:job_id>', methods=['GET'])
+@verify_token
 def get_job(job_id):
     """Obter vaga específica por ID"""
     try:
@@ -641,8 +812,10 @@ def get_job(job_id):
         return jsonify({'error': str(e)}), 500
 
 @api.route('/jobs', methods=['POST'])
+@verify_token
+@verify_role(['admin', 'manager'])
 def create_job():
-    """Criar nova vaga"""
+    """Criar nova vaga - APENAS ADMIN E MANAGER"""
     try:
         data = request.get_json()
         
@@ -685,8 +858,10 @@ def create_job():
         return jsonify({'error': str(e)}), 500
 
 @api.route('/jobs/<int:job_id>', methods=['PUT'])
+@verify_token
+@verify_role(['admin', 'manager'])
 def update_job(job_id):
-    """Atualizar vaga existente"""
+    """Atualizar vaga existente - APENAS ADMIN E MANAGER"""
     try:
         data = request.get_json()
         
@@ -727,8 +902,10 @@ def update_job(job_id):
         return jsonify({'error': str(e)}), 500
 
 @api.route('/jobs/<int:job_id>', methods=['DELETE'])
+@verify_token
+@verify_role(['admin'])
 def delete_job(job_id):
-    """Deletar vaga"""
+    """Deletar vaga - APENAS ADMIN"""
     try:
         # Verificar se a vaga existe
         existing = supabase.table('jobs').select('*').eq('id', job_id).execute()
@@ -743,10 +920,11 @@ def delete_job(job_id):
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
-# APPLICATIONS ENDPOINTS
+# APPLICATIONS ENDPOINTS - 🔒 PROTEGIDOS
 # =============================================================================
 
 @api.route('/applications', methods=['GET'])
+@verify_token
 def get_applications():
     """Listar candidaturas com dados relacionados (candidatos e vagas)"""
     try:
@@ -815,7 +993,196 @@ def get_applications():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+@api.route('/applications', methods=['POST'])
+@verify_token
+def create_application():
+    """Criar nova candidatura"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Dados não fornecidos'}), 400
+        
+        print(f"➕ POST /applications - Dados:", data)
+        
+        # Validações obrigatórias
+        if not data.get('candidate_id'):
+            return jsonify({'error': 'candidate_id é obrigatório'}), 400
+        
+        if not data.get('job_id'):
+            return jsonify({'error': 'job_id é obrigatório'}), 400
+        
+        # Verificar se candidatura já existe
+        existing = supabase.table('applications')\
+            .select('*')\
+            .eq('candidate_id', data['candidate_id'])\
+            .eq('job_id', data['job_id'])\
+            .execute()
+        
+        if existing.data:
+            return jsonify({'error': 'Candidato já se candidatou para esta vaga'}), 409
+        
+        # Preparar dados para inserção
+        application_data = {
+            'candidate_id': data['candidate_id'],
+            'job_id': data['job_id'],
+            'status': data.get('status', 'applied'),
+            'stage': data.get('stage', 1),
+            'notes': data.get('notes', ''),
+            'applied_at': datetime.now().isoformat(),
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        # Inserir candidatura
+        response = supabase.table('applications').insert(application_data).execute()
+        
+        if response.data:
+            new_application = response.data[0]
+            
+            print(f"✅ Candidatura criada com ID: {new_application.get('id')}")
+            
+            return jsonify({
+                'message': 'Candidatura criada com sucesso',
+                'application': new_application
+            }), 201
+        else:
+            return jsonify({'error': 'Erro ao criar candidatura'}), 500
+        
+    except Exception as e:
+        print(f"❌ Erro ao criar candidatura: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/applications/<int:application_id>', methods=['DELETE'])
+@verify_token
+@verify_role(['admin', 'manager'])
+def delete_application(application_id):
+    """Deletar candidatura - APENAS ADMIN E MANAGER"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        print(f"🗑️ DELETE /applications/{application_id}")
+        
+        # Verificar se existe
+        existing = supabase.table('applications').select('*').eq('id', application_id).execute()
+        if not existing.data:
+            return jsonify({'error': 'Candidatura não encontrada'}), 404
+        
+        # Deletar
+        response = supabase.table('applications').delete().eq('id', application_id).execute()
+        
+        print(f"✅ Candidatura {application_id} deletada")
+        
+        return jsonify({'message': 'Candidatura deletada com sucesso'})
+        
+    except Exception as e:
+        print(f"❌ Erro ao deletar candidatura: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/applications/<int:application_id>/stage', methods=['PUT'])
+@verify_token
+def move_application_stage(application_id):
+    """Mover candidatura para outra etapa"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Dados não fornecidos'}), 400
+        
+        print(f"🔄 PUT /applications/{application_id}/stage - Dados:", data)
+        
+        action = data.get('action')  # 'next', 'previous', ou 'specific'
+        target_stage = data.get('target_stage')
+        notes = data.get('notes', '')
+        
+        # Buscar candidatura atual
+        current_response = supabase.table('applications').select('*').eq('id', application_id).execute()
+        if not current_response.data:
+            return jsonify({'error': 'Candidatura não encontrada'}), 404
+        
+        current_app = current_response.data[0]
+        current_stage = current_app.get('stage', 1)
+        
+        # Determinar nova etapa
+        if action == 'next':
+            new_stage = min(current_stage + 1, 9)
+        elif action == 'previous':
+            new_stage = max(current_stage - 1, 1)
+        elif action == 'specific' and target_stage:
+            new_stage = max(1, min(target_stage, 9))
+        else:
+            return jsonify({'error': 'Ação inválida'}), 400
+        
+        # Atualizar status baseado na etapa
+        if new_stage == 9:
+            new_status = 'hired'
+        elif new_stage > 1:
+            new_status = 'in_progress'
+        else:
+            new_status = 'applied'
+        
+        # Dados para atualização
+        update_data = {
+            'stage': new_stage,
+            'status': new_status,
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        if notes:
+            update_data['notes'] = notes
+        
+        print(f"📝 Atualizando candidatura {application_id}: etapa {current_stage} → {new_stage}")
+        
+        # Executar update
+        response = supabase.table('applications').update(update_data).eq('id', application_id).execute()
+        
+        if response.data:
+            updated_app = response.data[0]
+            
+            # Buscar dados relacionados
+            if updated_app.get('candidate_id'):
+                try:
+                    candidate_resp = supabase.table('candidates').select('*').eq('id', updated_app['candidate_id']).execute()
+                    if candidate_resp.data:
+                        updated_app['candidates'] = candidate_resp.data[0]
+                except Exception as e:
+                    print(f"⚠️ Erro ao buscar candidato: {e}")
+            
+            if updated_app.get('job_id'):
+                try:
+                    job_resp = supabase.table('jobs').select('*').eq('id', updated_app['job_id']).execute()
+                    if job_resp.data:
+                        updated_app['jobs'] = job_resp.data[0]
+                except Exception as e:
+                    print(f"⚠️ Erro ao buscar vaga: {e}")
+            
+            print(f"✅ Candidatura movida com sucesso para etapa {new_stage}")
+            
+            return jsonify({
+                'message': f'Candidatura movida para etapa {new_stage}',
+                'application': updated_app
+            })
+        else:
+            return jsonify({'error': 'Erro ao atualizar candidatura'}), 500
+        
+    except Exception as e:
+        print(f"❌ Erro ao mover candidatura: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# PIPELINE ENDPOINTS - 🔒 PROTEGIDOS
+# =============================================================================
+
 @api.route('/pipeline', methods=['GET'])
+@verify_token
 def get_pipeline():
     """Obter pipeline Kanban das candidaturas com dados completos"""
     try:
@@ -905,7 +1272,73 @@ def get_pipeline():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+@api.route('/pipeline/stats', methods=['GET'])
+@verify_token
+def get_pipeline_stats():
+    """Obter estatísticas detalhadas do pipeline"""
+    try:
+        if not supabase:
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        print("📊 GET /pipeline/stats")
+        
+        job_id = request.args.get('job_id', type=int)
+        
+        # Buscar todas as candidaturas
+        query = supabase.table('applications').select('*')
+        if job_id:
+            query = query.eq('job_id', job_id)
+        
+        applications_response = query.execute()
+        applications = applications_response.data or []
+        
+        print(f"📊 Calculando estatísticas para {len(applications)} candidaturas")
+        
+        # Calcular estatísticas
+        total_applications = len(applications)
+        
+        # Contagem por status
+        status_count = {}
+        for app in applications:
+            status = app.get('status', 'applied')
+            status_count[status] = status_count.get(status, 0) + 1
+        
+        # Contagem por etapa
+        stage_count = {}
+        for app in applications:
+            stage = app.get('stage', 1)
+            stage_count[stage] = stage_count.get(stage, 0) + 1
+        
+        # Candidatos contratados (etapa 9)
+        hired_count = stage_count.get(9, 0)
+        
+        # Taxa de conversão
+        conversion_rate = (hired_count / max(total_applications, 1)) * 100
+        
+        # Tempo médio para contratação (placeholder)
+        avg_time_to_hire_days = 30
+        
+        stats = {
+            'total_applications': total_applications,
+            'status_count': status_count,
+            'stage_count': stage_count,
+            'conversion_rate': round(conversion_rate, 1),
+            'hired_count': hired_count,
+            'avg_time_to_hire_days': avg_time_to_hire_days
+        }
+        
+        print(f"✅ Estatísticas calculadas: {stats}")
+        
+        return jsonify(stats)
+        
+    except Exception as e:
+        print(f"❌ Erro ao calcular estatísticas: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 @api.route('/recruitment-stages', methods=['GET'])
+@verify_token
 def get_recruitment_stages():
     """Obter todas as etapas do processo de recrutamento"""
     try:
@@ -942,10 +1375,11 @@ def get_recruitment_stages():
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
-# DASHBOARD METRICS - VERSÃO COM FILTROS DE PERÍODO
+# DASHBOARD ENDPOINTS - 🔒 PROTEGIDOS
 # =============================================================================
 
 @api.route('/dashboard/metrics', methods=['GET'])
+@verify_token
 def get_dashboard_metrics():
     """Obter métricas COMPLETAS do dashboard - VERSÃO CORRIGIDA"""
     try:
@@ -1266,6 +1700,7 @@ def get_dashboard_metrics():
         return jsonify(fallback_metrics), 200
 
 @api.route('/dashboard/charts/applications-trend', methods=['GET'])
+@verify_token
 def get_applications_trend():
     """Dados detalhados para gráfico de tendência de candidaturas"""
     try:
@@ -1319,315 +1754,8 @@ def get_applications_trend():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# =============================================================================
-# HEALTH CHECK
-# =============================================================================
-
-@api.route('/health', methods=['GET'])
-def health_check():
-    """Verificação de saúde da API"""
-    try:
-        status = {
-            'api': 'ok',
-            'database': 'disconnected',
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        if supabase:
-            # Usar busca robusta para teste
-            candidates = robust_search_all_candidates()
-            status['database'] = 'connected'
-            status['candidates_count'] = len(candidates)
-            status['strategy'] = 'robust'
-        
-        return jsonify(status)
-        
-    except Exception as e:
-        return jsonify({
-            'api': 'ok',
-            'database': 'error',
-            'error': str(e),
-            'timestamp': datetime.now().isoformat()
-        }), 500
-    
-# 🚨 CORREÇÃO FINAL: routes.py - APLICAR ESTAS ADIÇÕES AO ARQUIVO EXISTENTE
-# Arquivo: backend/routes.py (ADICIONAR ESTAS LINHAS NO FINAL DO ARQUIVO, ANTES DO PRINT FINAL)
-
-# =============================================================================
-# ✅ ENDPOINTS FALTANTES - PIPELINE STATS E MOVIMENTAÇÃO
-# =============================================================================
-
-@api.route('/pipeline/stats', methods=['GET'])
-def get_pipeline_stats():
-    """Obter estatísticas detalhadas do pipeline"""
-    try:
-        if not supabase:
-            return jsonify({'error': 'Database not connected'}), 500
-        
-        print("📊 GET /pipeline/stats")
-        
-        job_id = request.args.get('job_id', type=int)
-        
-        # Buscar todas as candidaturas
-        query = supabase.table('applications').select('*')
-        if job_id:
-            query = query.eq('job_id', job_id)
-        
-        applications_response = query.execute()
-        applications = applications_response.data or []
-        
-        print(f"📊 Calculando estatísticas para {len(applications)} candidaturas")
-        
-        # Calcular estatísticas
-        total_applications = len(applications)
-        
-        # Contagem por status
-        status_count = {}
-        for app in applications:
-            status = app.get('status', 'applied')
-            status_count[status] = status_count.get(status, 0) + 1
-        
-        # Contagem por etapa
-        stage_count = {}
-        for app in applications:
-            stage = app.get('stage', 1)
-            stage_count[stage] = stage_count.get(stage, 0) + 1
-        
-        # Candidatos contratados (etapa 9)
-        hired_count = stage_count.get(9, 0)
-        
-        # Taxa de conversão
-        conversion_rate = (hired_count / max(total_applications, 1)) * 100
-        
-        # Tempo médio para contratação (placeholder)
-        avg_time_to_hire_days = 30
-        
-        stats = {
-            'total_applications': total_applications,
-            'status_count': status_count,
-            'stage_count': stage_count,
-            'conversion_rate': round(conversion_rate, 1),
-            'hired_count': hired_count,
-            'avg_time_to_hire_days': avg_time_to_hire_days
-        }
-        
-        print(f"✅ Estatísticas calculadas: {stats}")
-        
-        return jsonify(stats)
-        
-    except Exception as e:
-        print(f"❌ Erro ao calcular estatísticas: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-
-@api.route('/applications/<int:application_id>/stage', methods=['PUT'])
-def move_application_stage(application_id):
-    """Mover candidatura para outra etapa"""
-    try:
-        if not supabase:
-            return jsonify({'error': 'Database not connected'}), 500
-        
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Dados não fornecidos'}), 400
-        
-        print(f"🔄 PUT /applications/{application_id}/stage - Dados:", data)
-        
-        action = data.get('action')  # 'next', 'previous', ou 'specific'
-        target_stage = data.get('target_stage')
-        notes = data.get('notes', '')
-        
-        # Buscar candidatura atual
-        current_response = supabase.table('applications').select('*').eq('id', application_id).execute()
-        if not current_response.data:
-            return jsonify({'error': 'Candidatura não encontrada'}), 404
-        
-        current_app = current_response.data[0]
-        current_stage = current_app.get('stage', 1)
-        
-        # Determinar nova etapa
-        if action == 'next':
-            new_stage = min(current_stage + 1, 9)
-        elif action == 'previous':
-            new_stage = max(current_stage - 1, 1)
-        elif action == 'specific' and target_stage:
-            new_stage = max(1, min(target_stage, 9))
-        else:
-            return jsonify({'error': 'Ação inválida'}), 400
-        
-        # Atualizar status baseado na etapa
-        if new_stage == 9:
-            new_status = 'hired'
-        elif new_stage > 1:
-            new_status = 'in_progress'
-        else:
-            new_status = 'applied'
-        
-        # Dados para atualização
-        update_data = {
-            'stage': new_stage,
-            'status': new_status,
-            'updated_at': datetime.now().isoformat()
-        }
-        
-        if notes:
-            update_data['notes'] = notes
-        
-        print(f"📝 Atualizando candidatura {application_id}: etapa {current_stage} → {new_stage}")
-        
-        # Executar update
-        response = supabase.table('applications').update(update_data).eq('id', application_id).execute()
-        
-        if response.data:
-            updated_app = response.data[0]
-            
-            # Buscar dados relacionados
-            if updated_app.get('candidate_id'):
-                try:
-                    candidate_resp = supabase.table('candidates').select('*').eq('id', updated_app['candidate_id']).execute()
-                    if candidate_resp.data:
-                        updated_app['candidates'] = candidate_resp.data[0]
-                except Exception as e:
-                    print(f"⚠️ Erro ao buscar candidato: {e}")
-            
-            if updated_app.get('job_id'):
-                try:
-                    job_resp = supabase.table('jobs').select('*').eq('id', updated_app['job_id']).execute()
-                    if job_resp.data:
-                        updated_app['jobs'] = job_resp.data[0]
-                except Exception as e:
-                    print(f"⚠️ Erro ao buscar vaga: {e}")
-            
-            print(f"✅ Candidatura movida com sucesso para etapa {new_stage}")
-            
-            return jsonify({
-                'message': f'Candidatura movida para etapa {new_stage}',
-                'application': updated_app
-            })
-        else:
-            return jsonify({'error': 'Erro ao atualizar candidatura'}), 500
-        
-    except Exception as e:
-        print(f"❌ Erro ao mover candidatura: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-
-@api.route('/applications', methods=['POST'])
-def create_application():
-    """Criar nova candidatura"""
-    try:
-        if not supabase:
-            return jsonify({'error': 'Database not connected'}), 500
-        
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Dados não fornecidos'}), 400
-        
-        print(f"➕ POST /applications - Dados:", data)
-        
-        # Validações obrigatórias
-        if not data.get('candidate_id'):
-            return jsonify({'error': 'candidate_id é obrigatório'}), 400
-        
-        if not data.get('job_id'):
-            return jsonify({'error': 'job_id é obrigatório'}), 400
-        
-        # Verificar se candidatura já existe
-        existing = supabase.table('applications')\
-            .select('*')\
-            .eq('candidate_id', data['candidate_id'])\
-            .eq('job_id', data['job_id'])\
-            .execute()
-        
-        if existing.data:
-            return jsonify({'error': 'Candidato já se candidatou para esta vaga'}), 409
-        
-        # Preparar dados para inserção
-        application_data = {
-            'candidate_id': data['candidate_id'],
-            'job_id': data['job_id'],
-            'status': data.get('status', 'applied'),
-            'stage': data.get('stage', 1),
-            'notes': data.get('notes', ''),
-            'applied_at': datetime.now().isoformat(),
-            'updated_at': datetime.now().isoformat()
-        }
-        
-        # Inserir candidatura
-        response = supabase.table('applications').insert(application_data).execute()
-        
-        if response.data:
-            new_application = response.data[0]
-            
-            print(f"✅ Candidatura criada com ID: {new_application.get('id')}")
-            
-            return jsonify({
-                'message': 'Candidatura criada com sucesso',
-                'application': new_application
-            }), 201
-        else:
-            return jsonify({'error': 'Erro ao criar candidatura'}), 500
-        
-    except Exception as e:
-        print(f"❌ Erro ao criar candidatura: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-
-@api.route('/applications/<int:application_id>', methods=['DELETE'])
-def delete_application(application_id):
-    """Deletar candidatura"""
-    try:
-        if not supabase:
-            return jsonify({'error': 'Database not connected'}), 500
-        
-        print(f"🗑️ DELETE /applications/{application_id}")
-        
-        # Verificar se existe
-        existing = supabase.table('applications').select('*').eq('id', application_id).execute()
-        if not existing.data:
-            return jsonify({'error': 'Candidatura não encontrada'}), 404
-        
-        # Deletar
-        response = supabase.table('applications').delete().eq('id', application_id).execute()
-        
-        print(f"✅ Candidatura {application_id} deletada")
-        
-        return jsonify({'message': 'Candidatura deletada com sucesso'})
-        
-    except Exception as e:
-        print(f"❌ Erro ao deletar candidatura: {e}")
-        return jsonify({'error': str(e)}), 500
-
-# =============================================================================
-# ✅ CORS HEADERS - CORREÇÃO PARA PROBLEMAS DE CORS
-# =============================================================================
-
-@api.route('/applications/<int:application_id>/stage', methods=['OPTIONS'])
-def handle_preflight_stage(application_id):
-    """Handle OPTIONS request for CORS preflight"""
-    response = jsonify({})
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'PUT,OPTIONS')
-    return response
-
-@api.route('/pipeline/stats', methods=['OPTIONS'])
-def handle_preflight_stats():
-    """Handle OPTIONS request for CORS preflight"""
-    response = jsonify({})
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
-    return response
-
-# =============================================================================
-# ✅ ENDPOINT PARA DASHBOARD - DISTRIBUIÇÃO POR ETAPA
-# =============================================================================
-
 @api.route('/dashboard/pipeline-distribution', methods=['GET'])
+@verify_token
 def get_pipeline_distribution():
     """Obter distribuição de candidatos por etapa para o dashboard"""
     try:
@@ -1687,6 +1815,194 @@ def get_pipeline_distribution():
         print(f"❌ Erro ao calcular distribuição: {e}")
         return jsonify({'error': str(e)}), 500
 
-print("✅ CORREÇÃO APLICADA: Endpoints de pipeline e applications adicionados com CORS!")
+# =============================================================================
+# ENDPOINTS DE AUTENTICAÇÃO - PÚBLICOS
+# =============================================================================
 
-print("✅ Endpoints carregados com sucesso! [ESTRATÉGIA ROBUSTA COMPLETA + FILTROS DE PERÍODO]")
+@api.route('/auth/register', methods=['POST'])
+def register_user():
+    """Registrar novo usuário"""
+    try:
+        data = request.get_json()
+        
+        # Validações
+        required_fields = ['email', 'password', 'full_name']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'error': f'Campo {field} é obrigatório'}), 400
+        
+        email = data['email']
+        password = data['password']
+        full_name = data['full_name']
+        role = data.get('role', 'user')  # Role padrão: user
+        
+        # Registrar usuário no Supabase Auth
+        auth_response = supabase.auth.sign_up({
+            'email': email,
+            'password': password
+        })
+        
+        if auth_response.user:
+            # Criar perfil do usuário
+            profile = create_user_profile(
+                user_id=auth_response.user.id,
+                full_name=full_name,
+                role=role
+            )
+            
+            print(f"✅ Usuário registrado: {email}")
+            
+            return jsonify({
+                'message': 'Usuário registrado com sucesso',
+                'user': {
+                    'id': auth_response.user.id,
+                    'email': auth_response.user.email,  # Vem do auth.users
+                    'full_name': full_name,
+                    'role': role
+                }
+            }), 201
+        else:
+            return jsonify({'error': 'Erro ao registrar usuário'}), 400
+            
+    except Exception as e:
+        print(f"❌ Erro no registro: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/auth/login', methods=['POST'])
+def login_user():
+    """Login do usuário"""
+    try:
+        data = request.get_json()
+        
+        email = data.get('email')
+        password = data.get('password')
+        
+        if not email or not password:
+            return jsonify({'error': 'Email e senha são obrigatórios'}), 400
+        
+        # Autenticar com Supabase
+        auth_response = supabase.auth.sign_in_with_password({
+            'email': email,
+            'password': password
+        })
+        
+        if auth_response.user:
+            # Buscar perfil do usuário
+            profile_response = supabase.table('profiles').select('*').eq('user_id', auth_response.user.id).execute()
+            profile = profile_response.data[0] if profile_response.data else None
+            
+            # Log de auditoria
+            audit_log_action(
+                user_id=auth_response.user.id,
+                action="LOGIN",
+                resource="auth",
+                details=f"Login realizado por {email}"
+            )
+            
+            print(f"✅ Login realizado: {email}")
+            
+            return jsonify({
+                'message': 'Login realizado com sucesso',
+                'access_token': auth_response.session.access_token,
+                'user': {
+                    'id': auth_response.user.id,
+                    'email': auth_response.user.email,  # Vem do auth.users
+                    'full_name': profile.get('full_name') if profile else '',
+                    'role': profile.get('role', 'user') if profile else 'user'
+                }
+            }), 200
+        else:
+            return jsonify({'error': 'Credenciais inválidas'}), 401
+            
+    except Exception as e:
+        print(f"❌ Erro no login: {e}")
+        return jsonify({'error': 'Credenciais inválidas'}), 401
+
+@api.route('/auth/logout', methods=['POST'])
+@verify_token
+def logout_user():
+    """Logout do usuário"""
+    try:
+        # Log de auditoria
+        audit_log_action(
+            user_id=g.current_user.id,
+            action="LOGOUT",
+            resource="auth",
+            details="Logout realizado"
+        )
+        
+        # Fazer logout no Supabase
+        supabase.auth.sign_out()
+        
+        print(f"✅ Logout realizado: {g.current_user.email}")
+        
+        return jsonify({'message': 'Logout realizado com sucesso'}), 200
+        
+    except Exception as e:
+        print(f"❌ Erro no logout: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/auth/profile', methods=['GET'])
+@verify_token
+def get_user_profile():
+    """Obter perfil do usuário atual"""
+    try:
+        # Buscar perfil completo
+        profile_response = supabase.table('profiles').select('*').eq('user_id', g.current_user.id).execute()
+        profile = profile_response.data[0] if profile_response.data else None
+        
+        if not profile:
+            return jsonify({'error': 'Perfil não encontrado'}), 404
+        
+        return jsonify({
+            'user': {
+                'id': g.current_user.id,
+                'email': g.current_user.email,  # Vem do auth.users
+                'full_name': profile.get('full_name'),
+                'role': profile.get('role'),
+                'department': profile.get('department'),
+                'created_at': profile.get('created_at')
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Erro ao buscar perfil: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# CORS HANDLERS
+# =============================================================================
+
+@api.route('/applications/<int:application_id>/stage', methods=['OPTIONS'])
+def handle_preflight_stage(application_id):
+    """Handle OPTIONS request for CORS preflight"""
+    response = jsonify({})
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'PUT,OPTIONS')
+    return response
+
+@api.route('/pipeline/stats', methods=['OPTIONS'])
+def handle_preflight_stats():
+    """Handle OPTIONS request for CORS preflight"""
+    response = jsonify({})
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+    return response
+
+print("🔒 Sistema de autenticação avançada carregado!")
+print("✅ Endpoints carregados com sucesso! [ESTRATÉGIA ROBUSTA COMPLETA + PROTEÇÃO DE AUTENTICAÇÃO APLICADA]")
+print("🛡️ ROTAS PROTEGIDAS:")
+print("   - Todas as rotas de candidatos (/candidates/*)")
+print("   - Todas as rotas de vagas (/jobs/*)")
+print("   - Todas as rotas de candidaturas (/applications/*)")
+print("   - Todas as rotas de pipeline (/pipeline/*)")
+print("   - Todas as rotas de dashboard (/dashboard/*)")
+print("🔓 ROTAS PÚBLICAS:")
+print("   - /test, /health, /auth/register, /auth/login")
+print("👥 PERMISSÕES ESPECIAIS:")
+print("   - DELETE candidatos: apenas admin/manager")
+print("   - CREATE/UPDATE vagas: apenas admin/manager")
+print("   - DELETE vagas: apenas admin")
+print("   - DELETE candidaturas: apenas admin/manager")
