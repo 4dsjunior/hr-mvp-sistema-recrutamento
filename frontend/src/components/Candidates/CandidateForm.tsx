@@ -76,8 +76,23 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
       
       // ✅ Usar setTimeout para garantir que setValue funcione
       setTimeout(() => {
-        setValue('first_name', candidate.first_name || '');
-        setValue('last_name', candidate.last_name || '');
+        // 🔧 SOLUÇÃO: Verificar se temos first_name/last_name ou apenas name
+        let firstName = '';
+        let lastName = '';
+        
+        if (candidate.first_name && candidate.last_name) {
+          // Caso ideal: campos separados existem
+          firstName = candidate.first_name;
+          lastName = candidate.last_name;
+        } else if (candidate.name) {
+          // Caso real: apenas campo name concatenado - separar
+          const nameParts = candidate.name.trim().split(' ');
+          firstName = nameParts[0] || '';
+          lastName = nameParts.slice(1).join(' ') || '';
+        }
+        
+        setValue('first_name', firstName);
+        setValue('last_name', lastName);
         setValue('email', candidate.email || '');
         setValue('phone', candidate.phone || '');
         setValue('address', candidate.address || '');
@@ -86,9 +101,10 @@ const CandidateForm: React.FC<CandidateFormProps> = ({
         setValue('status', candidate.status as CandidateFormData['status'] || 'pending');
         
         console.log('✅ Valores definidos:', {
-          first_name: candidate.first_name,
-          last_name: candidate.last_name,
-          email: candidate.email
+          first_name: firstName,
+          last_name: lastName,
+          email: candidate.email,
+          original_name: candidate.name
         });
       }, 100);
     }
