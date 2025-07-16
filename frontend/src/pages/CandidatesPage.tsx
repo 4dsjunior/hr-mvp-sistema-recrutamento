@@ -6,6 +6,7 @@ import CandidateModal from '../components/Candidates/CandidateModal';
 import CandidatesFilters from '../components/Candidates/CandidatesFilters';
 import Pagination from '../components/UI/Pagination';
 import ToastContainer from '../components/UI/ToastContainer';
+import ExportButton from '../components/Reports/ExportButton';
 import { Candidate } from '../types';
 import { candidatesApi } from '../services/candidatesApi';
 import { useToast } from '../hooks/useToast';
@@ -249,13 +250,28 @@ const Candidates: React.FC = () => {
             Gerencie os candidatos do seu processo seletivo
           </p>
         </div>
-        <button
-          onClick={handleCreateCandidate}
-          className="flex items-center space-x-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors shadow-sm"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Novo Candidato</span>
-        </button>
+        <div className="flex items-center space-x-3">
+          <ExportButton
+            data={candidates}
+            title="Relatório de Candidatos"
+            subtitle={`Filtros: ${searchQuery ? `"${searchQuery}"` : 'Todos'} | Status: ${statusFilter || 'Todos'}`}
+            type="candidates"
+            filters={{
+              dateRange: 'month',
+              search: searchQuery,
+              status: statusFilter
+            }}
+            variant="outline"
+            size="sm"
+          />
+          <button
+            onClick={handleCreateCandidate}
+            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Novo Candidato</span>
+          </button>
+        </div>
       </div>
 
       <CandidatesFilters

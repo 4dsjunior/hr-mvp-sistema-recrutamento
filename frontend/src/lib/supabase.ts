@@ -27,7 +27,10 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    flowType: 'implicit'
+    flowType: 'implicit',
+    storage: window.sessionStorage, // ✅ MUDANÇA: sessionStorage ao invés de localStorage
+    storageKey: 'supabase.auth.token',
+    debug: import.meta.env.DEV
   },
   db: {
     schema: 'public'

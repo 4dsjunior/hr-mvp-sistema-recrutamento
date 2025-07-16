@@ -14,7 +14,16 @@ api.interceptors.request.use(
   async (config) => {
     try {
       // Obter token atual do Supabase
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('❌ Erro ao obter sessão para requisição:', error);
+        // Redirecionar para login se não conseguir obter sessão
+        if (error.message.includes('refresh_token') || error.message.includes('invalid')) {
+          window.location.href = '/login';
+        }
+        return config;
+      }
       
       if (session?.access_token) {
         config.headers.Authorization = `Bearer ${session.access_token}`;
@@ -40,11 +49,18 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       console.log('🚫 Token expirado/inválido - fazendo logout...');
       
+      // Limpar ambos os storages
+      localStorage.removeItem('supabase.auth.token');
+      sessionStorage.removeItem('supabase.auth.token');
+      
       // Fazer logout do Supabase
       await supabase.auth.signOut();
       
       // Redirecionar para login
       window.location.href = '/login';
+    } else if (error.response?.status === 403) {
+      console.log('🚫 Acesso negado');
+      // Não fazer logout em caso de 403, apenas mostrar erro
     }
     return Promise.reject(error);
   }

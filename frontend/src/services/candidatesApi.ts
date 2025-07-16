@@ -1,37 +1,5 @@
-import axios from 'axios';
 import { Candidate } from '../types';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
-// Configurar axios com timeout e headers
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 10000,
-});
-
-// Interceptor para logging de requests
-api.interceptors.request.use(
-  (config) => {
-    console.log(`🚀 API Call: ${config.method?.toUpperCase()} ${config.url}`);
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// Interceptor para logging de responses
-api.interceptors.response.use(
-  (response) => {
-    console.log(`✅ API Response: ${response.status}`, response.data);
-    return response;
-  },
-  (error) => {
-    console.error(`❌ API Error:`, error.response?.data || error.message);
-    return Promise.reject(error);
-  }
-);
+import api from '../lib/api'; // ✅ CORREÇÃO: Usar API centralizada com autenticação
 
 // Interfaces para conversão Backend <-> Frontend
 interface CandidateBackend {
@@ -145,7 +113,7 @@ export const candidatesApi = {
   // Testar conexão
   test: async (): Promise<boolean> => {
     try {
-      const response = await api.get('/test');
+      const response = await api.get('/api/test');
       return response.data.status === 'ok';
     } catch (error) {
       console.error('Erro ao testar conexão:', error);
@@ -156,7 +124,7 @@ export const candidatesApi = {
   // Verificar saúde da API
   health: async (): Promise<any> => {
     try {
-      const response = await api.get('/health');
+      const response = await api.get('/api/health');
       return response.data;
     } catch (error) {
       console.error('Erro ao verificar saúde:', error);
@@ -167,7 +135,7 @@ export const candidatesApi = {
   // Listar todos candidatos
   getAll: async (): Promise<Candidate[]> => {
     try {
-      const response = await api.get('/candidates');
+      const response = await api.get('/api/candidates');
       
       if (!Array.isArray(response.data)) {
         console.warn('Backend retornou formato inesperado:', response.data);
@@ -187,7 +155,7 @@ export const candidatesApi = {
   // Buscar candidato por ID
   getById: async (id: string): Promise<Candidate> => {
     try {
-      const response = await api.get(`/candidates/${id}`);
+      const response = await api.get(`/api/candidates/${id}`);
       const converted = backendToFrontend(response.data);
       console.log('✅ Candidato individual convertido:', converted);
       return converted;
@@ -209,7 +177,7 @@ export const candidatesApi = {
       const backendData = frontendToBackend(candidateData);
       console.log('📤 Enviando dados para criar candidato:', backendData);
       
-      const response = await api.post('/candidates', backendData);
+      const response = await api.post('/api/candidates', backendData);
       const converted = backendToFrontend(response.data);
       console.log('✅ Candidato criado e convertido:', converted);
       return converted;
@@ -226,7 +194,7 @@ export const candidatesApi = {
       const backendData = frontendToBackend(candidateData);
       console.log('📤 Enviando dados para atualizar candidato:', backendData);
       
-      const response = await api.put(`/candidates/${id}`, backendData);
+      const response = await api.put(`/api/candidates/${id}`, backendData);
       const converted = backendToFrontend(response.data);
       console.log('✅ Candidato atualizado e convertido:', converted);
       return converted;
@@ -241,7 +209,7 @@ export const candidatesApi = {
   delete: async (id: string): Promise<void> => {
     try {
       console.log('🗑️ Deletando candidato ID:', id);
-      await api.delete(`/candidates/${id}`);
+      await api.delete(`/api/candidates/${id}`);
       console.log('✅ Candidato deletado com sucesso');
     } catch (error: any) {
       console.error('Erro ao deletar candidato:', error);
@@ -264,7 +232,7 @@ export const candidatesApi = {
         params.append('status', backendStatus);
       }
       
-      const url = `/candidates/search${params.toString() ? `?${params}` : ''}`;
+      const url = `/api/candidates/search${params.toString() ? `?${params}` : ''}`;
       console.log('🔍 Buscando candidatos:', url);
       
       const response = await api.get(url);

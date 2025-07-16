@@ -35,6 +35,7 @@ import {
 // 🚀 IMPORTAÇÕES DOS COMPONENTES AVANÇADOS
 import AutoRefresh from '../components/Dashboard/AutoRefresh';
 import PeriodFilter from '../components/Dashboard/PeriodFilter';
+import ExportButton from '../components/Reports/ExportButton';
 
 // ✅ CORREÇÃO: Usar API centralizada com interceptors
 import api from '../lib/api';
@@ -356,6 +357,31 @@ const DashboardPage: React.FC = () => {
             onRefresh={() => loadMetrics(true)}
             loading={loading}
             className="w-full sm:w-auto"
+          />
+          
+          <ExportButton
+            data={[
+              ...((metrics?.recent_activities || []).map(activity => ({
+                type: 'activity',
+                candidate: activity.candidate_name,
+                job: activity.job_title,
+                stage: activity.stage,
+                status: activity.status,
+                date: activity.applied_at
+              }))),
+              ...((metrics?.top_jobs || []).map(job => ({
+                type: 'job_performance',
+                title: job.job_title,
+                company: job.company,
+                applications: job.applications_count
+              })))
+            ]}
+            title="Dashboard - Métricas Gerais"
+            subtitle={`Período: ${periodFilter.value} | Última atualização: ${new Date().toLocaleString()}`}
+            type="dashboard"
+            filters={periodFilter}
+            variant="outline"
+            size="sm"
           />
         </div>
       </div>

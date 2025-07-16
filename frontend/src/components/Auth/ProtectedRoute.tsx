@@ -1,7 +1,7 @@
 // 🛡️ COMPONENTE DE PROTEÇÃO DE ROTAS
 // Arquivo: frontend/src/components/Auth/ProtectedRoute.tsx
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthContext } from '../../hooks/useAuth';
 
@@ -85,8 +85,19 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredRoles = [],
   redirectTo = '/login'
 }) => {
-  const { isAuthenticated, loading, user } = useAuthContext();
+  const { isAuthenticated, loading, user, session } = useAuthContext();
   const location = useLocation();
+
+  // ============================================================================
+  // VERIFICAÇÃO ADICIONAL DE SESSÃO
+  // ============================================================================
+
+  useEffect(() => {
+    // Verificação adicional quando o componente monta
+    if (!loading && !isAuthenticated) {
+      console.log('🔒 ProtectedRoute: Usuário não autenticado, redirecionando para login');
+    }
+  }, [loading, isAuthenticated]);
 
   // ============================================================================
   // LOADING STATE
@@ -100,7 +111,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // NÃO AUTENTICADO
   // ============================================================================
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !session) {
+    // Limpar qualquer storage que possa estar inconsistente
+    localStorage.removeItem('supabase.auth.token');
+    sessionStorage.removeItem('supabase.auth.token');
+    
+    console.log('🔒 ProtectedRoute: Usuário não autenticado, redirecionando para login');
+    
     // Salvar a rota atual para redirecionar após login
     return (
       <Navigate 

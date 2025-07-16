@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, Bell, User, LogOut, Settings } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import UserProfile from '../Auth/UserProfile';
+import NotificationCenter from '../Notifications/NotificationCenter';
 
 const Header: React.FC = () => {
   const { user, signOut } = useAuth();
@@ -14,6 +15,14 @@ const Header: React.FC = () => {
       await signOut();
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
+    }
+  };
+
+  const handleNotificationClick = (notification: any) => {
+    console.log('Notificação clicada:', notification);
+    // Aqui você pode implementar navegação baseada no tipo de notificação
+    if (notification.actionUrl) {
+      window.location.href = notification.actionUrl;
     }
   };
 
@@ -37,12 +46,7 @@ const Header: React.FC = () => {
         {/* Right Side */}
         <div className="flex items-center space-x-4">
           {/* Notifications */}
-          <button className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
-            <Bell className="h-5 w-5" />
-            <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-              3
-            </span>
-          </button>
+          <NotificationCenter onNotificationClick={handleNotificationClick} />
 
           {/* User Menu */}
           <div className="relative">

@@ -30,11 +30,18 @@ export const useAuth = (): AuthContextType => {
       try {
         console.log('🔍 Verificando sessão atual...');
         
+        // Limpar qualquer sessão antiga no localStorage se existir
+        localStorage.removeItem('supabase.auth.token');
+        
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('❌ Erro ao obter sessão:', error);
-          throw error;
+          // Em caso de erro, limpar sessão e forçar logout
+          setSession(null);
+          setUser(null);
+          setLoading(false);
+          return;
         }
 
         console.log('📋 Sessão atual:', session ? 'Existe' : 'Não existe');
@@ -69,6 +76,8 @@ export const useAuth = (): AuthContextType => {
         } else if (event === 'SIGNED_OUT') {
           console.log('👋 Usuário deslogado');
           toast.success('Logout realizado com sucesso');
+        } else if (event === 'TOKEN_REFRESHED') {
+          console.log('🔄 Token refreshed');
         }
       }
     );
@@ -207,10 +216,17 @@ export const useAuth = (): AuthContextType => {
       setLoading(true);
       console.log('🚪 Iniciando logout...');
 
+      // Limpar ambos os storages antes do logout
+      localStorage.removeItem('supabase.auth.token');
+      sessionStorage.removeItem('supabase.auth.token');
+
       const { error } = await supabase.auth.signOut();
 
       if (error) {
         console.error('❌ Erro no logout:', error);
+        // Mesmo com erro, limpar estado local
+        setUser(null);
+        setSession(null);
         throw error;
       }
 
@@ -223,6 +239,7 @@ export const useAuth = (): AuthContextType => {
       console.error('❌ Erro no signOut:', error);
       toast.error('Erro ao fazer logout');
       
+      // Garantir que o estado seja limpo mesmo com erro
       setUser(null);
       setSession(null);
       

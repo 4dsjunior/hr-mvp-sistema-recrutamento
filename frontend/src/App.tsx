@@ -22,10 +22,8 @@ import JobsPage from './pages/JobsPage';
 import PipelinePage from './pages/PipelinePage';
 import ReportsPage from './pages/ReportsPage';
 
-// Hooks - não precisamos mais do useAuthContext aqui
-// import { useAuthContext } from './hooks/useAuth';
-
 function App() {
+  
   return (
     <ErrorBoundary>
       <Router>

@@ -20,6 +20,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import ExportButton from '../components/Reports/ExportButton';
 
 // ✅ CORREÇÃO: Usar API centralizada com interceptors
 import api from '../lib/api';
@@ -205,6 +206,19 @@ const JobsPage: React.FC = () => {
           <p className="text-gray-600">Gerencie as vagas disponíveis na empresa</p>
         </div>
         <div className="flex items-center space-x-3">
+          <ExportButton
+            data={filteredJobs}
+            title="Relatório de Vagas"
+            subtitle={`Filtros: ${searchQuery ? `"${searchQuery}"` : 'Todas'} | Status: ${statusFilter || 'Todos'}`}
+            type="jobs"
+            filters={{
+              dateRange: 'month',
+              search: searchQuery,
+              status: statusFilter
+            }}
+            variant="outline"
+            size="sm"
+          />
           <button
             onClick={loadJobs}
             disabled={loading}
